@@ -27,13 +27,13 @@ MODEL:
     NUM_FC: 2
     POOLER_RESOLUTION: 7
   ROI_MASK_HEAD:
-    IN_FEATURES: ["p2"] #add
+    IN_FEATURES: ["p2", "p3", "p4", "p5"] #add
     NAME: "MaskRCNNDCTHead"
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
     CLS_AGNOSTIC_MASK: True
     DCT_VECTOR_DIM: 300 #add
-    DCT_VECTOR_DIM_CUT: 10 #add
+    DCT_VECTOR_DIM_CUT: 300 #add
     MASK_SIZE: 128
     MASK_LOSS_PARA: 0.007
     DCT_LOSS_TYPE: "l1"

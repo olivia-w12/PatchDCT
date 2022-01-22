@@ -1,5 +1,3 @@
-
-
 import fvcore.nn.weight_init as weight_init
 from typing import List
 import torch
@@ -213,6 +211,20 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             pred_instances[0].pred_masks = torch.empty([0, 1, self.mask_size, self.mask_size]).to(device)
             return pred_instances
         else:
+            """ 
+            #set all zero:a test for DCT_MASK2
+            cut_dim = 60
+            pred_mask_logits = pred_mask_logits[:,:cut_dim]#add
+            embed = torch.zeros(pred_mask_logits.shape[0],self.dct_vector_dim-cut_dim).to(device)#add
+            pred_mask_logits = torch.cat((pred_mask_logits,embed),1)#add
+            
+            #set all zero at low frequency:a test for DCT_MASK2
+            cut_dim = 60
+            pred_mask_logits = pred_mask_logits[:,cut_dim:]#add
+            embed = torch.zeros(pred_mask_logits.shape[0],cut_dim).to(device)#add
+            pred_mask_logits = torch.cat((embed,pred_mask_logits),1)#add
+            """
+
             pred_mask_rc = self.dct_encoding.decode(pred_mask_logits.detach())
             pred_mask_rc = pred_mask_rc[:, None, :, :]
             pred_instances[0].pred_masks = pred_mask_rc

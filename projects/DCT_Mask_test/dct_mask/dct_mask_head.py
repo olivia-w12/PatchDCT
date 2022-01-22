@@ -52,8 +52,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
                                                                                             self.mask_loss_para))
         print("dct_vector dim test:{}".format(dct_vector_dim_cut))
         
-        self.dct_encoding = DctMaskEncoding(vec_dim=dct_vector_dim_cut, mask_size=mask_size)
-        self.dct_encoding_gt_inference = DctMaskEncoding(vec_dim=dct_vector_dim,mask_size=mask_size)
+        self.dct_encoding = DctMaskEncoding(vec_dim=dct_vector_dim, mask_size=mask_size)
 
         self.conv_norm_relus = []
 
@@ -75,7 +74,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
 
         self.predictor_fc1 = nn.Linear(256*14*14, 1024)
         self.predictor_fc2 = nn.Linear(1024, 1024)
-        self.predictor_fc3 = nn.Linear(1024, dct_vector_dim_cut)
+        self.predictor_fc3 = nn.Linear(1024, dct_vector_dim)
     
         for layer in self.conv_norm_relus:
             weight_init.c2_msra_fill(layer)
@@ -153,9 +152,8 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         Returns:
             mask_loss (Tensor): A scalar tensor containing the loss.
         """
-       
-
         gt_masks = self.get_gt_mask(instances,pred_mask_logits)
+
         if self.dct_loss_type == "l1":
             num_instance = gt_masks.size()[0]
             mask_loss = F.l1_loss(pred_mask_logits, gt_masks, reduction="none")
@@ -205,13 +203,33 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             pred_instances[0].pred_masks = torch.empty([0, 1, self.mask_size, self.mask_size]).to(device)
             return pred_instances
         else:
-            with torch.no_grad():
-                gt_mask = self.get_gt_mask_inference(pred_instances,pred_mask_logits)#[N,300]
-                gt_mask = gt_mask[:,self.dct_vector_dim_cut:]
-                pred_mask_logits = torch.cat((pred_mask_logits,gt_mask),1)
-                pred_mask_rc = self.dct_encoding_gt_inference.decode(pred_mask_logits)
 
-            #pred_mask_rc = self.dct_encoding.decode(pred_mask_logits.detach())
+            with torch.no_grad():
+                if self.dct_vector_dim_cut<self.dct_vector_dim:
+                    gt_mask = self.get_gt_mask_inference(pred_instances,pred_mask_logits)#[N,300]
+
+                    pred_mask_logits = pred_mask_logits[:, :self.dct_vector_dim_cut]
+                    gt_mask = gt_mask[:,self.dct_vector_dim_cut:]
+                    #use zero to test pX feature
+                    #gt_mask = torch.zeros(pred_mask_logits.shape[0],self.dct_vector_dim-self.dct_vector_dim_cut).to(device)
+                    pred_mask_logits = torch.cat((pred_mask_logits,gt_mask),1)
+                    pred_mask_rc = self.dct_encoding.decode(pred_mask_logits)
+
+                    """
+                    pred_mask_logits = pred_mask_logits[:, self.dct_vector_dim_cut:]
+                    gt_mask = gt_mask[:, :self.dct_vector_dim_cut]
+                    # use zero to test pX feature
+                    pred_mask_logits = torch.cat(( gt_mask,pred_mask_logits), 1)
+                    pred_mask_rc = self.dct_encoding.decode(pred_mask_logits)
+                    """
+                    """
+                    emb = torch.zeros(pred_mask_logits.shape[0],299).to(device)
+                    gt_mask = gt_mask[:,:1]
+                    pred_mask_logits = torch.cat((gt_mask,emb),1)
+                    pred_mask_rc = self.dct_encoding.decode(pred_mask_logits)
+                    """
+                else:
+                    pred_mask_rc = self.dct_encoding.decode(pred_mask_logits.detach())
             pred_mask_rc = pred_mask_rc[:, None, :, :]
             pred_instances[0].pred_masks = pred_mask_rc
             return pred_instances
@@ -250,7 +268,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
                 device = instances_per_image.pred_boxes.tensor.device
                 gt_masks_per_image = torch.zeros((shape,self.mask_size,self.mask_size),dtype=torch.bool).to(device)
 
-            gt_masks_vector = self.dct_encoding_gt_inference.encode(gt_masks_per_image)  # [N, dct_v_dim]
+            gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)  # [N, dct_v_dim]
             gt_masks.append(gt_masks_vector)
 
         if len(gt_masks) == 0:
@@ -260,3 +278,15 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
 
         gt_masks = gt_masks.to(dtype=torch.float32)
         return gt_masks
+
+    def loss_label(self,gt_masks):
+        device = gt_masks.device
+        gt_weight = torch.histc(gt_masks.abs())
+        weight_1 = gt_weight[0]
+        weight_2 = torch.sum(gt_weight[1:20])
+        weight_3 = torch.sum(gt_weight[20:])
+        label1 = torch.zeros([int(weight_1)]).to(device) + 0.0001
+        label2 = torch.zeros([int(weight_2)]).to(device) + 1
+        label3 = torch.zeros([int(weight_3)]).to(device) + 10
+        label = torch.cat([label1, label2, label3])
+        return label
