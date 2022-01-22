@@ -25,6 +25,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
     @configurable
     def __init__(self, input_shape: ShapeSpec, *, num_classes, dct_vector_dim, mask_size,
                  dct_vector_dim_cut,
+                 dct_vector_dim_first,
                  dct_loss_type, mask_loss_para,
                  conv_dims, conv_norm="", **kwargs):
         """
@@ -44,7 +45,8 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         self.mask_size = mask_size
         self.dct_loss_type = dct_loss_type
         self.dct_vector_dim_cut = dct_vector_dim_cut
-        
+        self.dct_vector_dim_first = dct_vector_dim_first
+
         self.mask_loss_para = mask_loss_para
         print("mask size: {}, dct_vector dim: {}, loss type: {}, mask_loss_para: {}".format(self.mask_size,
                                                                                             self.dct_vector_dim,
@@ -72,17 +74,24 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             self.conv_norm_relus.append(conv)
             cur_channels = conv_dim
 
+        self.predictor_fc2_first = nn.Linear(1024, 1024)
+        self.predictor_fc3_first = nn.Linear(1024, self.dct_vector_dim_first)
+
+        #self.predictor_fc2_second = nn.Linear(1024,256)
+        #self.predictor_fc3_second = nn.Linear(1024,int(self.dct_vector_dim_second-self.dct_vector_dim_first))
+
         self.predictor_fc1 = nn.Linear(256*14*14, 1024)
         self.predictor_fc2 = nn.Linear(1024, 1024)
-        self.predictor_fc3 = nn.Linear(1024, dct_vector_dim)
-    
+        self.predictor_fc3 = nn.Linear(1024, int(dct_vector_dim-dct_vector_dim_first))
+
         for layer in self.conv_norm_relus:
             weight_init.c2_msra_fill(layer)
-        for layer in [self.predictor_fc1, self.predictor_fc2]:
+        for layer in [self.predictor_fc1, self.predictor_fc2,self.predictor_fc2_first]:
             weight_init.c2_xavier_fill(layer)
 
-        nn.init.normal_(self.predictor_fc3.weight, std=0.001)
-        nn.init.constant_(self.predictor_fc3.bias, 0)
+        for m in [self.predictor_fc3,self.predictor_fc3_first]:
+            nn.init.normal_(m.weight, std=0.001)
+            nn.init.constant_(m.bias, 0)
 
     @classmethod
     def from_config(cls, cfg, input_shape):
@@ -95,6 +104,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             input_shape=input_shape,
             dct_vector_dim=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM,
             dct_vector_dim_cut=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM_CUT,
+            dct_vector_dim_first=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM_FIRST,
             mask_size=cfg.MODEL.ROI_MASK_HEAD.MASK_SIZE,
             dct_loss_type=cfg.MODEL.ROI_MASK_HEAD.DCT_LOSS_TYPE,
             mask_loss_para=cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_PARA
@@ -111,8 +121,13 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             x = layer(x)
         x = torch.flatten(x, start_dim=1)
         x = F.relu(self.predictor_fc1(x))
-        x = F.relu(self.predictor_fc2(x))
-        x = self.predictor_fc3(x)
+
+        x1 = F.relu(self.predictor_fc2(x))
+        x1 = self.predictor_fc3(x1)
+
+        x2 = F.relu(self.predictor_fc2_first(x))
+        x2 = self.predictor_fc3_first(x2)
+        x = torch.cat([x2,x1],1)
         return x
 
     def forward(self, x, instances: List[Instances]):
@@ -153,7 +168,6 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             mask_loss (Tensor): A scalar tensor containing the loss.
         """
         gt_masks = self.get_gt_mask(instances,pred_mask_logits)
-
         if self.dct_loss_type == "l1":
             num_instance = gt_masks.size()[0]
             mask_loss = F.l1_loss(pred_mask_logits, gt_masks, reduction="none")
