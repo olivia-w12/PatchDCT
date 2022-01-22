@@ -74,8 +74,8 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             self.conv_norm_relus.append(conv)
             cur_channels = conv_dim
 
-        self.predictor_fc2_first = nn.Linear(1024, 1024)
-        self.predictor_fc3_first = nn.Linear(1024, self.dct_vector_dim_first)
+        self.predictor_fc2_first = nn.Linear(1024, 256)
+        self.predictor_fc3_first = nn.Linear(256, self.dct_vector_dim_first)
 
         #self.predictor_fc2_second = nn.Linear(1024,256)
         #self.predictor_fc3_second = nn.Linear(1024,int(self.dct_vector_dim_second-self.dct_vector_dim_first))
