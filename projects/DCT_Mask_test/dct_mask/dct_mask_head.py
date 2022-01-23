@@ -26,6 +26,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
     def __init__(self, input_shape: ShapeSpec, *, num_classes, dct_vector_dim, mask_size,
                  dct_vector_dim_cut,
                  dct_vector_dim_first,
+                 mask_loss_balance_para,
                  dct_loss_type, mask_loss_para,
                  conv_dims, conv_norm="", **kwargs):
         """
@@ -46,6 +47,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         self.dct_loss_type = dct_loss_type
         self.dct_vector_dim_cut = dct_vector_dim_cut
         self.dct_vector_dim_first = dct_vector_dim_first
+        self.mask_loss_balance_para = mask_loss_balance_para
 
         self.mask_loss_para = mask_loss_para
         print("mask size: {}, dct_vector dim: {}, loss type: {}, mask_loss_para: {}".format(self.mask_size,
@@ -105,6 +107,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             dct_vector_dim=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM,
             dct_vector_dim_cut=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM_CUT,
             dct_vector_dim_first=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM_FIRST,
+            mask_loss_balance_para=cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_BALANCE_PARA,
             mask_size=cfg.MODEL.ROI_MASK_HEAD.MASK_SIZE,
             dct_loss_type=cfg.MODEL.ROI_MASK_HEAD.DCT_LOSS_TYPE,
             mask_loss_para=cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_PARA
@@ -127,8 +130,8 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
 
         x2 = F.relu(self.predictor_fc2_first(x))
         x2 = self.predictor_fc3_first(x2)
-        x = torch.cat([x2,x1],1)
-        return x
+
+        return x1,x2
 
     def forward(self, x, instances: List[Instances]):
         """
@@ -144,14 +147,14 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         Returns:
             A dict of losses in training. The predicted "instances" in inference.
         """
-        x = self.layers(x)
+        x1,x2 = self.layers(x)
         if self.training:
-            return {"loss_mask": self.mask_rcnn_dct_loss(x, instances, self.vis_period)}
+            return {"loss_mask": self.mask_rcnn_dct_loss(x1,x2, instances, self.vis_period)}
         else:
-            pred_instances = self.mask_rcnn_dct_inference(x, instances)
+            pred_instances = self.mask_rcnn_dct_inference(x1,x2, instances)
             return pred_instances
 
-    def mask_rcnn_dct_loss(self, pred_mask_logits, instances, vis_period=0):
+    def mask_rcnn_dct_loss(self, pred_mask_logits, pred_mask_logits2,instances, vis_period=0):
         """
         Compute the mask prediction loss defined in the Mask R-CNN paper.
 
@@ -168,11 +171,14 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             mask_loss (Tensor): A scalar tensor containing the loss.
         """
         gt_masks = self.get_gt_mask(instances,pred_mask_logits)
+        gt_masks_1 = gt_masks[:,:self.dct_vector_dim_first]
+        gt_masks_2 = gt_masks[:,self.dct_vector_dim_first:]
         if self.dct_loss_type == "l1":
             num_instance = gt_masks.size()[0]
-            mask_loss = F.l1_loss(pred_mask_logits, gt_masks, reduction="none")
+            mask_loss_1 = F.l1_loss(pred_mask_logits2, gt_masks_1, reduction="none")
+            mask_loss_2 = F.l1_loss(pred_mask_logits, gt_masks_2, reduction="none")
+            mask_loss = self.mask_loss_balance_para*torch.sum(mask_loss_1)+torch.sum(mask_loss_2)
             mask_loss = self.mask_loss_para * mask_loss / num_instance
-            mask_loss = torch.sum(mask_loss)
             
         elif self.dct_loss_type == "sl1":
             num_instance = gt_masks.size()[0]
@@ -189,7 +195,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
 
         return mask_loss
 
-    def mask_rcnn_dct_inference(self,pred_mask_logits, pred_instances):
+    def mask_rcnn_dct_inference(self,pred_mask_logits1,pred_mask_logits2, pred_instances):
         """
         Convert pred_mask_logits to estimated foreground probability masks while also
         extracting only the masks for the predicted classes in pred_instances. For each
@@ -211,6 +217,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
                 the predicted masks to the original image resolution and/or binarizing them, is left
                 to the caller.
         """
+        pred_mask_logits = torch.cat(pred_mask_logits2,pred_mask_logits1)
         num_masks = pred_mask_logits.shape[0]
         device = pred_mask_logits.device
         if num_masks == 0:
