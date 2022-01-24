@@ -175,12 +175,11 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         gt_masks = self.get_gt_mask(instances,pred_mask_logits)
         gt_masks_add = gt_masks-pred_mask_logits
         gt_masks_add = gt_masks_add[:,0].detach().reshape(-1,1)
-        label = torch.ones(1,self.dct_vector_dim).to(gt_masks.device)
-        label[0,0] = 0
+
         if self.dct_loss_type == "l1":
             num_instance = gt_masks.size()[0]
             mask_loss_1 = F.l1_loss(pred_mask_logits_add, gt_masks_add, reduction="none")
-            mask_loss_2 = label*F.l1_loss(pred_mask_logits, gt_masks, reduction="none")
+            mask_loss_2 = F.l1_loss(pred_mask_logits, gt_masks, reduction="none")
             mask_loss = self.mask_loss_balance_para*torch.sum(mask_loss_1)+torch.sum(mask_loss_2)
             mask_loss = self.mask_loss_para * mask_loss / num_instance
             
