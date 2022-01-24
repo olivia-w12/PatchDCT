@@ -217,7 +217,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
                 the predicted masks to the original image resolution and/or binarizing them, is left
                 to the caller.
         """
-        pred_mask_logits = torch.cat(pred_mask_logits2,pred_mask_logits1)
+        pred_mask_logits = torch.cat((pred_mask_logits2,pred_mask_logits1),1)
         num_masks = pred_mask_logits.shape[0]
         device = pred_mask_logits.device
         if num_masks == 0:
