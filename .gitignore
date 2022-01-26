@@ -46,3 +46,6 @@ wheels/
 /projects/*/datasets
 /models
 /projects/DCT_Mask_test/result-record/
+/projects/DCT_Mask_add/result-record/
+/projects/DCT_Mask_add/mask_loss/
+/projects/DCT_Mask_test/mask_loss/
