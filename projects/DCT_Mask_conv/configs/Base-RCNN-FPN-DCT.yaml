@@ -1,5 +1,5 @@
 MODEL:
-  META_ARCHITECTURE: "GeneralizedRCNN"
+  META_ARCHITECTURE: "GeneralizedRCNN_TEST"
   BACKBONE:
     NAME: "build_resnet_fpn_backbone"
   RESNETS:
@@ -19,18 +19,22 @@ MODEL:
     POST_NMS_TOPK_TRAIN: 1000
     POST_NMS_TOPK_TEST: 1000
   ROI_HEADS:
-    NAME: "StandardROIHeads"
+    NAME: "ROIHeads_MASK_DIFFER"
     IN_FEATURES: ["p2", "p3", "p4", "p5"]
   ROI_BOX_HEAD:
     NAME: "FastRCNNConvFCHead"
     NUM_FC: 2
     POOLER_RESOLUTION: 7
   ROI_MASK_HEAD:
+    IN_FEATURES: ["p2", "p3", "p4", "p5"] #add
     NAME: "MaskRCNNDCTHead"
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
     CLS_AGNOSTIC_MASK: True
-    DCT_VECTOR_DIM: 300
+    DCT_VECTOR_DIM: 300 #add
+    DCT_VECTOR_DIM_CUT: 300 #add
+    DCT_VECTOR_DIM_FIRST: 1 #add
+    MASK_LOSS_BALANCE_PARA: 1 #add
     MASK_SIZE: 128
     MASK_LOSS_PARA: 0.007
     DCT_LOSS_TYPE: "l1"

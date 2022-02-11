@@ -187,5 +187,4 @@ class ROIHeads_MASK_DIFFER(StandardROIHeads):
         else:
             pred_boxes = [x.pred_boxes for x in instances]
             mask_features = self.mask_pooler(features, pred_boxes)
-            #modify here
             return self.mask_head(mask_features, instances)

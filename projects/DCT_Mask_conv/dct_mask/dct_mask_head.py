@@ -1,3 +1,5 @@
+
+import os
 import fvcore.nn.weight_init as weight_init
 from typing import List
 import torch
@@ -22,6 +24,9 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
 
     @configurable
     def __init__(self, input_shape: ShapeSpec, *, num_classes, dct_vector_dim, mask_size,
+                 dct_vector_dim_cut,
+                 dct_vector_dim_first,
+                 mask_loss_balance_para,
                  dct_loss_type, mask_loss_para,
                  conv_dims, conv_norm="", **kwargs):
         """
@@ -40,14 +45,19 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         self.dct_vector_dim = dct_vector_dim
         self.mask_size = mask_size
         self.dct_loss_type = dct_loss_type
-        
+        self.dct_vector_dim_cut = dct_vector_dim_cut
+        self.dct_vector_dim_first = dct_vector_dim_first
+        self.mask_loss_balance_para = mask_loss_balance_para
+
         self.mask_loss_para = mask_loss_para
         print("mask size: {}, dct_vector dim: {}, loss type: {}, mask_loss_para: {}".format(self.mask_size,
                                                                                             self.dct_vector_dim,
                                                                                             self.dct_loss_type,
                                                                                             self.mask_loss_para))
+        print("dct_vector dim test:{}".format(dct_vector_dim_cut))
         
         self.dct_encoding = DctMaskEncoding(vec_dim=dct_vector_dim, mask_size=mask_size)
+
         self.conv_norm_relus = []
 
         cur_channels = input_shape.channels
@@ -66,20 +76,24 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             self.conv_norm_relus.append(conv)
             cur_channels = conv_dim
 
+        linear_regression_dim=dct_vector_dim-1
+        self.conv1 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(256, 1, kernel_size=3, stride=1, padding=1)
+
         self.predictor_fc1 = nn.Linear(256*14*14, 1024)
         self.predictor_fc2 = nn.Linear(1024, 1024)
-        self.predictor_fc3 = nn.Linear(1024, dct_vector_dim-1)
-
-        self.conv1= nn.Conv2d(256,256,kernel_size=3,stride=1,padding=1)
-        self.conv2 = nn.Conv2d(256,1,kernel_size=3,stride=1,padding=1)
+        self.predictor_fc3 = nn.Linear(1024, linear_regression_dim)
 
         for layer in self.conv_norm_relus:
             weight_init.c2_msra_fill(layer)
         for layer in [self.predictor_fc1, self.predictor_fc2]:
             weight_init.c2_xavier_fill(layer)
 
+
         nn.init.normal_(self.predictor_fc3.weight, std=0.001)
         nn.init.constant_(self.predictor_fc3.bias, 0)
+
+
 
     @classmethod
     def from_config(cls, cfg, input_shape):
@@ -91,6 +105,9 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             conv_norm=cfg.MODEL.ROI_MASK_HEAD.NORM,
             input_shape=input_shape,
             dct_vector_dim=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM,
+            dct_vector_dim_cut=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM_CUT,
+            dct_vector_dim_first=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM_FIRST,
+            mask_loss_balance_para=cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_BALANCE_PARA,
             mask_size=cfg.MODEL.ROI_MASK_HEAD.MASK_SIZE,
             dct_loss_type=cfg.MODEL.ROI_MASK_HEAD.DCT_LOSS_TYPE,
             mask_loss_para=cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_PARA
@@ -108,14 +125,14 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         first_dim = self.conv1(x)
         first_dim = F.relu(self.conv2(first_dim))
         first_dim = first_dim.squeeze(1)
-        first_dim = F.adaptive_avg_pool2d(first_dim,1)*self.mask_size
+        first_dim = F.adaptive_avg_pool2d(first_dim, 1) * self.mask_size
         first_dim = torch.flatten(first_dim, start_dim=1)
 
         x = torch.flatten(x, start_dim=1)
         x = F.relu(self.predictor_fc1(x))
         x = F.relu(self.predictor_fc2(x))
         x = self.predictor_fc3(x)
-        return x,first_dim
+        return x, first_dim
 
     def forward(self, x, instances: List[Instances]):
         """
@@ -135,16 +152,16 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         if self.training:
             return {"loss_mask": self.mask_rcnn_dct_loss(x,first_dim,instances, self.vis_period)}
         else:
-            pred_instances = self.mask_rcnn_dct_inference(x,first_dim,instances)
+            pred_instances = self.mask_rcnn_dct_inference(x,first_dim, instances)
             return pred_instances
 
-    def mask_rcnn_dct_loss(self, pred_mask_logits, first_dim,instances, vis_period=0):
+    def mask_rcnn_dct_loss(self, pred_mask_logits, first_dim, instances, vis_period=0):
         """
         Compute the mask prediction loss defined in the Mask R-CNN paper.
 
         Args:
             pred_mask_logits (Tensor): [B, D]. D is dct-dim. [B, D]. DCT_Vector.
-            
+
             instances (list[Instances]): A list of N Instances, where N is the number of images
                 in the batch. These instances are in 1:1
                 correspondence with the pred_mask_logits. The ground-truth labels (class, box, mask,
@@ -154,7 +171,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         Returns:
             mask_loss (Tensor): A scalar tensor containing the loss.
         """
-       
+
         gt_masks = []
         for instances_per_image in instances:
             if len(instances_per_image) == 0:
@@ -170,16 +187,17 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
 
         gt_masks = cat(gt_masks, dim=0)
         gt_masks = gt_masks.to(dtype=torch.float32)
-        gt_masks_first_dim = gt_masks[:,0].reshape(-1,1)
-        gt_masks_other = gt_masks[:,1:]
+        gt_masks_first_dim = gt_masks[:, 0].reshape(-1, 1)
+        gt_masks_other = gt_masks[:, 1:]
+
         if self.dct_loss_type == "l1":
             num_instance = gt_masks.size()[0]
-            mask_loss_1=F.smooth_l1_loss(first_dim,gt_masks_first_dim,reduction="sum")
+            mask_loss_1 = self.mask_loss_balance_para*F.smooth_l1_loss(first_dim, gt_masks_first_dim, reduction="sum")
             mask_loss_2 = F.l1_loss(pred_mask_logits, gt_masks_other, reduction="sum")
-            mask_loss = mask_loss_1+mask_loss_2
+            mask_loss = mask_loss_1 + mask_loss_2
             mask_loss = self.mask_loss_para * mask_loss / num_instance
             mask_loss = torch.sum(mask_loss)
-            
+
         elif self.dct_loss_type == "sl1":
             num_instance = gt_masks.size()[0]
             mask_loss = F.smooth_l1_loss(pred_mask_logits, gt_masks, reduction="none")
@@ -195,7 +213,7 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
 
         return mask_loss
 
-    def mask_rcnn_dct_inference(self,pred_mask_logits,first_dim,pred_instances):
+    def mask_rcnn_dct_inference(self,pred_mask_logits,pred_mask_logits_first_dim, pred_instances):
         """
         Convert pred_mask_logits to estimated foreground probability masks while also
         extracting only the masks for the predicted classes in pred_instances. For each
@@ -217,28 +235,72 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
                 the predicted masks to the original image resolution and/or binarizing them, is left
                 to the caller.
         """
+        pred_mask_logits = torch.cat((pred_mask_logits_first_dim,pred_mask_logits),1)
         num_masks = pred_mask_logits.shape[0]
         device = pred_mask_logits.device
         if num_masks == 0:
             pred_instances[0].pred_masks = torch.empty([0, 1, self.mask_size, self.mask_size]).to(device)
             return pred_instances
         else:
-            """ 
-            #set all zero:a test for DCT_MASK2
-            cut_dim = 60
-            pred_mask_logits = pred_mask_logits[:,:cut_dim]#add
-            embed = torch.zeros(pred_mask_logits.shape[0],self.dct_vector_dim-cut_dim).to(device)#add
-            pred_mask_logits = torch.cat((pred_mask_logits,embed),1)#add
-            
-            #set all zero at low frequency:a test for DCT_MASK2
-            cut_dim = 60
-            pred_mask_logits = pred_mask_logits[:,cut_dim:]#add
-            embed = torch.zeros(pred_mask_logits.shape[0],cut_dim).to(device)#add
-            pred_mask_logits = torch.cat((embed,pred_mask_logits),1)#add
-            """
+
             with torch.no_grad():
-                pred_mask_logits = torch.cat((first_dim,pred_mask_logits),1)
-                pred_mask_rc = self.dct_encoding.decode(pred_mask_logits)
-                pred_mask_rc = pred_mask_rc[:, None, :, :]
-                pred_instances[0].pred_masks = pred_mask_rc
-                return pred_instances
+                if self.dct_vector_dim_cut<self.dct_vector_dim:
+                    gt_mask = self.get_gt_mask_inference(pred_instances,pred_mask_logits)#[N,300]
+                    pred_mask_logits = pred_mask_logits[:, :self.dct_vector_dim_cut]
+                    gt_mask = gt_mask[:,self.dct_vector_dim_cut:]
+
+                    pred_mask_logits = torch.cat((pred_mask_logits,gt_mask),1)
+                    pred_mask_rc = self.dct_encoding.decode(pred_mask_logits)
+
+                else:
+                    pred_mask_rc = self.dct_encoding.decode(pred_mask_logits.detach())
+            pred_mask_rc = pred_mask_rc[:, None, :, :]
+            pred_instances[0].pred_masks = pred_mask_rc
+            return pred_instances
+
+    def get_gt_mask(self,instances,pred_mask_logits):
+        gt_masks = []
+        for instances_per_image in instances:
+            if len(instances_per_image) == 0:
+                continue
+
+            gt_masks_per_image = instances_per_image.gt_masks.crop_and_resize(
+                instances_per_image.proposal_boxes.tensor, self.mask_size)
+            gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)  # [N, dct_v_dim]
+            gt_masks.append(gt_masks_vector)
+
+        if len(gt_masks) == 0:
+            return pred_mask_logits.sum() * 0
+
+        gt_masks = cat(gt_masks, dim=0)
+
+        gt_masks = gt_masks.to(dtype=torch.float32)
+        return gt_masks
+
+
+    def get_gt_mask_inference(self,instances,pred_mask_logits):
+        gt_masks = []
+        for instances_per_image in instances:
+            if len(instances_per_image) == 0:
+                continue
+            if instances_per_image.has("gt_masks"):
+                gt_masks_per_image = instances_per_image.gt_masks.crop_and_resize(
+                    instances_per_image.pred_boxes.tensor, self.mask_size)
+            else:
+                #print("gt_mask is empty")
+                shape = instances_per_image.pred_boxes.tensor.shape[0]
+                device = instances_per_image.pred_boxes.tensor.device
+                gt_masks_per_image = torch.zeros((shape,self.mask_size,self.mask_size),dtype=torch.bool).to(device)
+
+            gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)  # [N, dct_v_dim]
+            gt_masks.append(gt_masks_vector)
+
+        if len(gt_masks) == 0:
+            return pred_mask_logits.sum() * 0
+
+        gt_masks = cat(gt_masks, dim=0)
+
+        gt_masks = gt_masks.to(dtype=torch.float32)
+        return gt_masks
+
+
