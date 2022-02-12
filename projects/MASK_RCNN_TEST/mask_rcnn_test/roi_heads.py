@@ -2,6 +2,7 @@
 import inspect
 import logging
 import numpy as np
+from copy import deepcopy
 from typing import Dict, List, Optional, Tuple, Union
 import torch
 from torch import nn
@@ -40,7 +41,7 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         box_pooler: ROIPooler,
         box_head: nn.Module,
         box_predictor: nn.Module,
-        if_mask_head_2,
+        gt_mask_resolution,
         mask_in_features: Optional[List[str]] = None,
         mask_pooler: Optional[ROIPooler] = None,
         mask_head: Optional[nn.Module] = None,
@@ -77,12 +78,11 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         self.box_predictor = box_predictor
 
         self.mask_on = mask_in_features is not None
-        self.if_mask_head_2 = if_mask_head_2
         if self.mask_on:
+            self.gt_mask_resolution = gt_mask_resolution
             self.mask_in_features = mask_in_features
             self.mask_pooler = mask_pooler
             self.mask_head = mask_head
-
             self.mask_pooler_2 = mask_pooler_2
             self.mask_head_2 = mask_head_2
         self.keypoint_on = keypoint_in_features is not None
@@ -97,7 +97,7 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
     def from_config(cls, cfg, input_shape):
         ret = super().from_config(cfg)
         ret["train_on_pred_boxes"] = cfg.MODEL.ROI_BOX_HEAD.TRAIN_ON_PRED_BOXES
-        ret.update(if_mask_head_2 = cfg.MODEL.ROI_MASK_HEAD.REFERENCE_28)
+        ret["gt_mask_resolution"] = cfg.MODEL.ROI_MASK_HEAD.GT_MASKS_RESOLUTION
         # Subclasses that have not been updated to use from_config style construction
         # may have overridden _init_*_head methods. In this case, those overridden methods
         # will not be classmethods and we need to avoid trying to call them here.
@@ -239,7 +239,7 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         features: Dict[str, torch.Tensor],
         proposals: List[Instances],
         targets: Optional[List[Instances]] = None,
-    ) -> Tuple[List[Instances], Dict[str, torch.Tensor]]:
+    ) -> Union[Tuple[List[Instances], Dict[str, torch.Tensor]],Tuple]:
         """
         See :class:`ROIHeads.forward`.
         """
@@ -247,7 +247,7 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         if self.training:
             assert targets
             proposals = self.label_and_sample_proposals(proposals, targets)
-        del targets
+            del targets
 
         if self.training:
             losses = self._forward_box(features, proposals)
@@ -259,14 +259,17 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
             return proposals, losses
         else:
             pred_instances = self._forward_box(features, proposals)
+            gt_instances = deepcopy(pred_instances)
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
-            pred_instances = self.forward_with_given_boxes(features, pred_instances)
-            return pred_instances, {}
+            pred_instances1,pred_instances2 = self.forward_with_given_boxes(features, pred_instances)
+            gt_instances = self.match_gt_to_pred_boxes(targets, gt_instances)
+            del targets
+            return pred_instances1, pred_instances2,gt_instances
 
     def forward_with_given_boxes(
         self, features: Dict[str, torch.Tensor], instances: List[Instances]
-    ) -> List[Instances]:
+    ) -> Union[List[Instances],Tuple]:
         """
         Use the given boxes in `instances` to produce other (non-box) per-ROI outputs.
 
@@ -287,9 +290,9 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         assert not self.training
         assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
 
-        instances = self._forward_mask(features, instances)
-        instances = self._forward_keypoint(features, instances)
-        return instances
+        instances1,instances2 = self._forward_mask(features, instances)
+        #instances = self._forward_keypoint(features, instances)
+        return instances1,instances2
 
     def _forward_box(
         self, features: Dict[str, torch.Tensor], proposals: List[Instances]
@@ -333,7 +336,7 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
 
     def _forward_mask(
         self, features: Dict[str, torch.Tensor], instances: List[Instances]
-    ) -> Union[Dict[str, torch.Tensor], List[Instances]]:
+    ) -> Union[Dict[str, torch.Tensor], List[Instances],Tuple]:
         """
         Forward logic of the mask prediction branch.
 
@@ -361,17 +364,17 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
             mask_features_2 = self.mask_pooler_2(features, proposal_boxes)
             mask_loss_1 = self.mask_head(mask_features, proposals)
             mask_loss_2 = self.mask_head_2(mask_features_2,proposals)
-            loss = mask_loss_1["loss_mask"]+mask_loss_2["loss_mask"]
+            loss = (mask_loss_1["loss_mask"]+mask_loss_2["loss_mask"])/2
             mask_loss = {"loss_mask": loss}
             return mask_loss
         else:
             pred_boxes = [x.pred_boxes for x in instances]
-            if self.if_mask_head_2:
-                mask_features_2 = self.mask_pooler_2(features,pred_boxes)
-                return self.mask_head_2(mask_features_2,instances)
-            else:
-                mask_features = self.mask_pooler(features, pred_boxes)
-                return self.mask_head(mask_features, instances)
+            mask_features_2 = self.mask_pooler_2(features,pred_boxes)
+            mask_features = self.mask_pooler(features, pred_boxes)
+            instances2 = deepcopy(instances)
+            instances1 = self.mask_head(mask_features, instances)
+            instances2 = self.mask_head_2(mask_features_2,instances2)
+            return instances1,instances2
 
     def _forward_keypoint(
         self, features: Dict[str, torch.Tensor], instances: List[Instances]
@@ -407,3 +410,49 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
             pred_boxes = [x.pred_boxes for x in instances]
             keypoint_features = self.keypoint_pooler(features, pred_boxes)
             return self.keypoint_head(keypoint_features, instances)
+
+    def match_gt_to_pred_boxes(self,targets,pred_instances):
+        with torch.no_grad():
+            pred_instances_with_gt = []
+            for pred_instances_per_image, targets_per_image in zip(pred_instances, targets):
+                match_quality_matrix = pairwise_iou(
+                    targets_per_image.gt_boxes, pred_instances_per_image.pred_boxes
+                )
+                matched_idxs, matched_labels = self.proposal_matcher(match_quality_matrix)
+
+                #match_gt
+                has_gt = len(targets_per_image) > 0
+                # Get the corresponding GT for each proposal
+                if has_gt:
+                    gt_classes = targets_per_image.gt_classes[matched_idxs]
+                    # Label unmatched proposals (0 label from matcher) as background (label=num_classes)
+                    gt_classes[matched_labels == 0] = self.num_classes
+                    # Label ignore proposals (-1 label)
+                    gt_classes[matched_labels == -1] = -1
+                else:
+                    gt_classes = torch.zeros_like(matched_idxs) + self.num_classes
+
+
+                pred_instances_per_image.gt_classes = gt_classes
+
+                # We index all the attributes of targets that start with "gt_"
+                # and have not been added to proposals yet (="gt_classes").
+                if has_gt:
+                    for (trg_name, trg_value) in targets_per_image.get_fields().items():
+                        if trg_name=="gt_masks" and not pred_instances_per_image.has(trg_name):
+                            trg_value = trg_value[matched_idxs]
+                            trg_value = \
+                                trg_value.crop_and_resize(pred_instances_per_image.pred_boxes.tensor, self.gt_mask_resolution)
+                            trg_value = trg_value.to(dtype = torch.float32)
+                            trg_value = trg_value.reshape(-1,1,self.gt_mask_resolution,self.gt_mask_resolution)
+                            pred_instances_per_image.set("pred_masks", trg_value)
+                else:
+                    gt_boxes = Boxes(
+                        targets_per_image.gt_boxes.tensor.new_zeros((len(matched_idxs), 4))
+                    )
+                    pred_instances_per_image.gt_boxes = gt_boxes
+
+                pred_instances_with_gt.append(pred_instances_per_image)
+
+
+        return pred_instances_with_gt
