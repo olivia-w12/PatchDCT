@@ -1,5 +1,5 @@
 MODEL:
-  META_ARCHITECTURE: "GeneralizedRCNN"
+  META_ARCHITECTURE: "GeneralizedRCNN_2_RESOLUTION"
   BACKBONE:
     NAME: "build_resnet_fpn_backbone"
   RESNETS:
@@ -31,7 +31,7 @@ MODEL:
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
     POOLER_RESOLUTION2: 28
-    REFERENCE_28: True
+    GT_MASKS_RESOLUTION: 128
   WEIGHTS: "./checkpoints/R-50.pkl"
   MASK_ON: True
 DATASETS:
