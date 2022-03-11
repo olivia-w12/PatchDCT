@@ -86,7 +86,11 @@ class COCOEvaluator(DatasetEvaluator):
         self._do_evaluation = "annotations" in self._coco_api.dataset
 
     def reset(self):
-        self._predictions = []
+        p = {}
+        for i in range(3):
+            p[i] = []
+        self._predictions = p
+
 
     def _tasks_from_config(self, cfg):
         """
@@ -110,47 +114,66 @@ class COCOEvaluator(DatasetEvaluator):
                 "instances" that contains :class:`Instances`.
         """
         for input, output0,output1,output2 in zip(inputs, outputs[0],outputs[1],outputs[2]):
-            output = output1
-            prediction = {"image_id": input["image_id"]}
+            out = [output0,output1,output2]
+            for i in range(3):
+                prediction = {"image_id": input["image_id"]}
+                output = out[i]
 
-            # TODO this is ugly
-            if "instances" in output:
-                instances = output["instances"].to(self._cpu_device)
-                prediction["instances"] = instances_to_coco_json(instances, input["image_id"])
-            if "proposals" in output:
-                prediction["proposals"] = output["proposals"].to(self._cpu_device)
-            self._predictions.append(prediction)
+                # TODO this is ugly
+                if "instances" in output:
+                    instances = output["instances"].to(self._cpu_device)
+                    prediction["instances"] = instances_to_coco_json(instances, input["image_id"])
+                if "proposals" in output:
+                    prediction["proposals"] = output["proposals"].to(self._cpu_device)
+                self._predictions[i].append(prediction)
 
     def evaluate(self):
-        if self._distributed:
-            comm.synchronize()
-            predictions = comm.gather(self._predictions, dst=0)
-            predictions = list(itertools.chain(*predictions))
+        pred = {}
+        for i in range(3):
+            if self._distributed:
+                comm.synchronize()
+                predictions = comm.gather(self._predictions[i], dst=0)
+                predictions = list(itertools.chain(*predictions))
 
-            if not comm.is_main_process():
-                return {}
-        else:
-            predictions = self._predictions
+                if not comm.is_main_process():
+                    pred[i] = {}
+                    continue
+                    #return {}
 
-        if len(predictions) == 0:
-            self._logger.warning("[COCOEvaluator] Did not receive valid predictions.")
-            return {}
+            else:
+                predictions = self._predictions[i]
+
+            if len(predictions) == 0:
+                self._logger.warning("[COCOEvaluator] Did not receive valid predictions.")
+                #return {}
+                pred[i] = {}
+                continue
+
+            pred[i]=predictions
 
         if self._output_dir:
             PathManager.mkdirs(self._output_dir)
             file_path = os.path.join(self._output_dir, "instances_predictions.pth")
             with PathManager.open(file_path, "wb") as f:
-                torch.save(predictions, f)
+                torch.save(pred, f)
 
-        self._results = OrderedDict()
-        if "proposals" in predictions[0]:
-            self._eval_box_proposals(predictions)
-        if "instances" in predictions[0]:
-            self._eval_predictions(set(self._tasks), predictions)
+
+        self._results = {}
+        for i in range(3):
+            predictions = pred[i]
+            self._results[i] = OrderedDict()
+            self._logger.info("---------------------------------------")
+            self._logger.info("Preparing results for COCO format [OUTOUT{}]...".format(i))
+            if "proposals" in predictions[0]:
+                self._eval_box_proposals(predictions,i)
+            if "instances" in predictions[0]:
+                self._eval_predictions(set(self._tasks), predictions,i)
+            self._logger.info("---------------------------------------")
+
         # Copy so the caller can do whatever with results
         return copy.deepcopy(self._results)
 
-    def _eval_predictions(self, tasks, predictions):
+    def _eval_predictions(self, tasks, predictions,i):
         """
         Evaluate predictions on the given tasks.
         Fill self._results with the metrics of the tasks.
@@ -196,9 +219,9 @@ class COCOEvaluator(DatasetEvaluator):
             res = self._derive_coco_results(
                 coco_eval, task, class_names=self._metadata.get("thing_classes")
             )
-            self._results[task] = res
+            self._results[i][task] = res
 
-    def _eval_box_proposals(self, predictions):
+    def _eval_box_proposals(self, predictions,i):
         """
         Evaluate the box proposals in predictions.
         Fill self._results with the metrics for "box_proposals" task.
@@ -235,7 +258,7 @@ class COCOEvaluator(DatasetEvaluator):
                 key = "AR{}@{:d}".format(suffix, limit)
                 res[key] = float(stats["ar"].item() * 100)
         self._logger.info("Proposal metrics: \n" + create_small_table(res))
-        self._results["box_proposals"] = res
+        self._results[i]["box_proposals"] = res
 
     def _derive_coco_results(self, coco_eval, iou_type, class_names=None):
         """
