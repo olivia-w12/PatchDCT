@@ -126,65 +126,6 @@ class Trainer(DefaultTrainer):
         res = OrderedDict({k + "_TTA": v for k, v in res.items()})
         return res
 
-    @classmethod
-    def test(cls, cfg, model, evaluators=None):
-        """
-        Args:
-            cfg (CfgNode):
-            model (nn.Module):
-            evaluators (list[DatasetEvaluator] or None): if None, will call
-                :meth:`build_evaluator`. Otherwise, must have the same length as
-                `cfg.DATASETS.TEST`.
-
-        Returns:
-            dict: a dict of result metrics
-        """
-        logger = logging.getLogger(__name__)
-        if isinstance(evaluators, DatasetEvaluator):
-            evaluators = [evaluators]
-        if evaluators is not None:
-            assert len(cfg.DATASETS.TEST) == len(evaluators), "{} != {}".format(
-                len(cfg.DATASETS.TEST), len(evaluators)
-            )
-
-        results = OrderedDict()
-        for idx, dataset_name in enumerate(cfg.DATASETS.TEST):
-            data_loader = cls.build_test_loader(cfg, dataset_name)
-            # When evaluators are passed in as arguments,
-            # implicitly assume that evaluators can be created before data_loader.
-            if evaluators is not None:
-                evaluator = evaluators[idx]
-            else:
-                try:
-                    evaluator = cls.build_evaluator(cfg, dataset_name)
-                except NotImplementedError:
-                    logger.warn(
-                        "No evaluator found. Use `DefaultTrainer.test(evaluators=)`, "
-                        "or implement its `build_evaluator` method."
-                    )
-                    results[dataset_name] = {}
-                    continue
-            results_i = inference_on_dataset(model, data_loader, evaluator)
-            if len(results_i) == 0:
-                results_i ={}
-                for i in range(3):
-                    results_i[i] = {}
-
-            results[dataset_name] = {}
-            for i in range(3):
-                results[dataset_name][i] = results_i
-                if comm.is_main_process():
-                    assert isinstance(
-                            results_i[i], dict
-                        ), "Evaluator must return a dict on the main process. Got {} instead.".format(
-                            results_i[i]
-                        )
-                    logger.info("Evaluation results for {} in csv format:".format(dataset_name))
-                    print_csv_format(results_i[i])
-
-        if len(results) == 1:
-            results = list(results.values())[0]
-        return results
 
 
 def setup(args):
@@ -209,16 +150,10 @@ def main(args):
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
         res = Trainer.test(cfg, model)
-        print('---------------------------------------\n')
-        print("result1 resolution is {}\n".format(cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION))
-        print("result2 resolution is {}\n".format(cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION2))
-        print("result3(gt) resolution is {}\n".format(cfg.MODEL.ROI_MASK_HEAD.GT_MASKS_RESOLUTION))
-        print('---------------------------------------\n')
-        for i in range(3):
-            if cfg.TEST.AUG.ENABLED:
-                res[i].update(Trainer.test_with_TTA(cfg, model))
-            if comm.is_main_process():
-                verify_results(cfg, res[i])
+        if cfg.TEST.AUG.ENABLED:
+            res.update(Trainer.test_with_TTA(cfg, model))
+        if comm.is_main_process():
+            verify_results(cfg, res)
         return res
 
     """
@@ -233,7 +168,6 @@ def main(args):
             [hooks.EvalHook(0, lambda: trainer.test_with_TTA(cfg, trainer.model))]
         )
     return trainer.train()
-
 
 if __name__ == "__main__":
     args = default_argument_parser().parse_args()
