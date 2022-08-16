@@ -31,7 +31,7 @@ MODEL:
     NUM_FC: 2
     POOLER_RESOLUTION: 7
   ROI_MASK_HEAD:
-    NAME: "MaskRCNNDCTHead"
+    NAME: "MaskRCNNDCTHead1"
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
     CLS_AGNOSTIC_MASK: True
@@ -39,11 +39,11 @@ MODEL:
     MASK_LOSS_PARA: 0.007
     MASK_SIZE: 128
     DCT_LOSS_TYPE: "l1"
-  WEIGHTS: "detectron2://ImageNetPretrained/FAIR/X-101-32x8d.pkl"
+  WEIGHTS: "./output/rx101.pth"
   MASK_ON: True
 DATASETS:
   TRAIN: ("coco_2017_train",)
-  TEST: ("coco_2017_val",) # "lvis_v0.5_val_cocofied")
+  TEST: ("coco_2017_test-dev")
 SOLVER:
   IMS_PER_BATCH: 16
   BASE_LR: 0.02

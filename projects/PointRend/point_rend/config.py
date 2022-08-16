@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
 
 from detectron2.config import CfgNode as CN
 
@@ -46,3 +46,13 @@ def add_pointrend_config(cfg):
     # If True, then coarse prediction features are used as inout for each layer in PointRend's MLP.
     cfg.MODEL.POINT_HEAD.COARSE_PRED_EACH_LAYER = True
     cfg.MODEL.POINT_HEAD.COARSE_SEM_SEG_HEAD_NAME = "SemSegFPNHead"
+
+    """
+    Add config for Implicit PointRend.
+    """
+    cfg.MODEL.IMPLICIT_POINTREND = CN()
+
+    cfg.MODEL.IMPLICIT_POINTREND.IMAGE_FEATURE_ENABLED = True
+    cfg.MODEL.IMPLICIT_POINTREND.POS_ENC_ENABLED = True
+
+    cfg.MODEL.IMPLICIT_POINTREND.PARAMS_L2_REGULARIZER = 0.00001

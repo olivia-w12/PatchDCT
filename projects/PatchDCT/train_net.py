@@ -38,18 +38,8 @@ from detectron2.evaluation import (
     verify_results,
 )
 from detectron2.modeling import GeneralizedRCNNWithTTA
-from mask_rcnn_test.config import add_dctmask_config
-from detectron2.evaluation import (
-    DatasetEvaluator,
-    inference_on_dataset,
-    print_csv_format,
-    verify_results,
-)
-from detectron2.evaluation.evaluator import inference_context
-import time,datetime
-from detectron2.utils.comm import get_world_size, is_main_process
-from detectron2.utils.logger import log_every_n_seconds
-from mask_rcnn_test import COCOEvaluator
+from dct_mask import add_dctmask_config
+
 
 class Trainer(DefaultTrainer):
     """
@@ -127,13 +117,12 @@ class Trainer(DefaultTrainer):
         return res
 
 
-
 def setup(args):
     """
     Create configs and perform basic setups.
     """
     cfg = get_cfg()
-    add_dctmask_config(cfg)
+    add_dctmask_config(cfg)#add for dct mask
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
@@ -168,6 +157,7 @@ def main(args):
             [hooks.EvalHook(0, lambda: trainer.test_with_TTA(cfg, trainer.model))]
         )
     return trainer.train()
+
 
 if __name__ == "__main__":
     args = default_argument_parser().parse_args()

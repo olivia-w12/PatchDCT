@@ -2,7 +2,6 @@
 import inspect
 import logging
 import numpy as np
-from copy import deepcopy
 from typing import Dict, List, Optional, Tuple, Union
 import torch
 from torch import nn
@@ -20,8 +19,10 @@ from detectron2.modeling.roi_heads import StandardROIHeads,select_foreground_pro
 from detectron2.modeling.roi_heads.keypoint_head import build_keypoint_head
 from detectron2.modeling.roi_heads.roi_heads import select_proposals_with_visible_keypoints
 
+
+
 @ROI_HEADS_REGISTRY.register()
-class StandardROIHeads_2_RESOLUTION(ROIHeads):
+class ROIHeads_MASK_dct(ROIHeads):
     """
     It's "standard" in a sense that there is no ROI transform sharing
     or feature sharing between tasks.
@@ -41,12 +42,9 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         box_pooler: ROIPooler,
         box_head: nn.Module,
         box_predictor: nn.Module,
-        gt_mask_resolution,
         mask_in_features: Optional[List[str]] = None,
         mask_pooler: Optional[ROIPooler] = None,
         mask_head: Optional[nn.Module] = None,
-        mask_pooler_2: Optional[ROIPooler] = None,
-        mask_head_2: Optional[nn.Module] = None,
         keypoint_in_features: Optional[List[str]] = None,
         keypoint_pooler: Optional[ROIPooler] = None,
         keypoint_head: Optional[nn.Module] = None,
@@ -79,12 +77,9 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
 
         self.mask_on = mask_in_features is not None
         if self.mask_on:
-            self.gt_mask_resolution = gt_mask_resolution
             self.mask_in_features = mask_in_features
             self.mask_pooler = mask_pooler
             self.mask_head = mask_head
-            self.mask_pooler_2 = mask_pooler_2
-            self.mask_head_2 = mask_head_2
         self.keypoint_on = keypoint_in_features is not None
         if self.keypoint_on:
             self.keypoint_in_features = keypoint_in_features
@@ -97,7 +92,6 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
     def from_config(cls, cfg, input_shape):
         ret = super().from_config(cfg)
         ret["train_on_pred_boxes"] = cfg.MODEL.ROI_BOX_HEAD.TRAIN_ON_PRED_BOXES
-        ret["gt_mask_resolution"] = cfg.MODEL.ROI_MASK_HEAD.GT_MASKS_RESOLUTION
         # Subclasses that have not been updated to use from_config style construction
         # may have overridden _init_*_head methods. In this case, those overridden methods
         # will not be classmethods and we need to avoid trying to call them here.
@@ -107,7 +101,6 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
             ret.update(cls._init_box_head(cfg, input_shape))
         if inspect.ismethod(cls._init_mask_head):
             ret.update(cls._init_mask_head(cfg, input_shape))
-            ret.update(cls._init_mask_head_2_(cfg,input_shape))
         if inspect.ismethod(cls._init_keypoint_head):
             ret.update(cls._init_keypoint_head(cfg, input_shape))
         return ret
@@ -162,7 +155,6 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         sampling_ratio    = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
         pooler_type       = cfg.MODEL.ROI_MASK_HEAD.POOLER_TYPE
         # fmt: on
-
         in_channels = [input_shape[f].channels for f in in_features][0]
 
         ret = {"mask_in_features": in_features}
@@ -173,36 +165,6 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
             pooler_type=pooler_type,
         )
         ret["mask_head"] = build_mask_head(
-            cfg, ShapeSpec(channels=in_channels, width=pooler_resolution, height=pooler_resolution)
-        )
-        return ret
-
-    @classmethod
-    def _init_mask_head_2_(cls, cfg, input_shape):
-        if not cfg.MODEL.MASK_ON:
-            return {}
-        # fmt: off
-        in_features = cfg.MODEL.ROI_HEADS.IN_FEATURES
-        # in_features       = ("p2", )
-        # print('forcing use P2 as mask InFeatures')
-
-        pooler_resolution = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION2
-        pooler_scales = tuple(1.0 / input_shape[k].stride for k in in_features)
-        sampling_ratio = cfg.MODEL.ROI_MASK_HEAD.POOLER_SAMPLING_RATIO
-        pooler_type = cfg.MODEL.ROI_MASK_HEAD.POOLER_TYPE
-        # fmt: on
-
-        in_channels = [input_shape[f].channels for f in in_features][0]
-
-        #ret = {"mask_in_features_2": in_features,"if_mask_head_2":if_mask_head_2}
-        ret={}
-        ret["mask_pooler_2"] = ROIPooler(
-            output_size=pooler_resolution,
-            scales=pooler_scales,
-            sampling_ratio=sampling_ratio,
-            pooler_type=pooler_type,
-        )
-        ret["mask_head_2"] = build_mask_head(
             cfg, ShapeSpec(channels=in_channels, width=pooler_resolution, height=pooler_resolution)
         )
         return ret
@@ -239,7 +201,7 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         features: Dict[str, torch.Tensor],
         proposals: List[Instances],
         targets: Optional[List[Instances]] = None,
-    ) -> Union[Tuple[List[Instances], Dict[str, torch.Tensor]],Tuple]:
+    ) -> Tuple[List[Instances], Dict[str, torch.Tensor]]:
         """
         See :class:`ROIHeads.forward`.
         """
@@ -259,17 +221,15 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
             return proposals, losses
         else:
             pred_instances = self._forward_box(features, proposals)
-            gt_instances = deepcopy(pred_instances)
+            pred_instances = self.match_gt_to_pred_boxes(targets, pred_instances)
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
-            pred_instances1,pred_instances2 = self.forward_with_given_boxes(features, pred_instances)
-            gt_instances = self.match_gt_to_pred_boxes(targets, gt_instances)
-            del targets
-            return pred_instances1, pred_instances2,gt_instances
+            pred_instances = self.forward_with_given_boxes(features, pred_instances)
+            return pred_instances, {}
 
     def forward_with_given_boxes(
         self, features: Dict[str, torch.Tensor], instances: List[Instances]
-    ) -> Union[List[Instances],Tuple]:
+    ) -> List[Instances]:
         """
         Use the given boxes in `instances` to produce other (non-box) per-ROI outputs.
 
@@ -290,9 +250,9 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         assert not self.training
         assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
 
-        instances1,instances2 = self._forward_mask(features, instances)
-        #instances = self._forward_keypoint(features, instances)
-        return instances1,instances2
+        instances = self._forward_mask(features, instances)
+        instances = self._forward_keypoint(features, instances)
+        return instances
 
     def _forward_box(
         self, features: Dict[str, torch.Tensor], proposals: List[Instances]
@@ -336,7 +296,7 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
 
     def _forward_mask(
         self, features: Dict[str, torch.Tensor], instances: List[Instances]
-    ) -> Union[Dict[str, torch.Tensor], List[Instances],Tuple]:
+    ) -> Union[Dict[str, torch.Tensor], List[Instances]]:
         """
         Forward logic of the mask prediction branch.
 
@@ -354,27 +314,18 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
         if not self.mask_on:
             return {} if self.training else instances
 
-        features = [features[f] for f in self.mask_in_features]
 
+        features = [features[f] for f in self.mask_in_features]
         if self.training:
             # The loss is only defined on positive proposals.
             proposals, _ = select_foreground_proposals(instances, self.num_classes)
             proposal_boxes = [x.proposal_boxes for x in proposals]
             mask_features = self.mask_pooler(features, proposal_boxes)
-            mask_features_2 = self.mask_pooler_2(features, proposal_boxes)
-            mask_loss_1 = self.mask_head(mask_features, proposals)
-            mask_loss_2 = self.mask_head_2(mask_features_2,proposals)
-            loss = (mask_loss_1["loss_mask"]+mask_loss_2["loss_mask"])/2
-            mask_loss = {"loss_mask": loss}
-            return mask_loss
+            return self.mask_head(mask_features,proposals)
         else:
             pred_boxes = [x.pred_boxes for x in instances]
-            mask_features_2 = self.mask_pooler_2(features,pred_boxes)
             mask_features = self.mask_pooler(features, pred_boxes)
-            instances2 = deepcopy(instances)
-            instances1 = self.mask_head(mask_features, instances)
-            instances2 = self.mask_head_2(mask_features_2,instances2)
-            return instances1,instances2
+            return self.mask_head(mask_features,instances)
 
     def _forward_keypoint(
         self, features: Dict[str, torch.Tensor], instances: List[Instances]
@@ -439,13 +390,9 @@ class StandardROIHeads_2_RESOLUTION(ROIHeads):
                 # and have not been added to proposals yet (="gt_classes").
                 if has_gt:
                     for (trg_name, trg_value) in targets_per_image.get_fields().items():
-                        if trg_name=="gt_masks" and not pred_instances_per_image.has(trg_name):
+                        if trg_name.startswith("gt_") and not pred_instances_per_image.has(trg_name):
                             trg_value = trg_value[matched_idxs]
-                            trg_value = \
-                                trg_value.crop_and_resize(pred_instances_per_image.pred_boxes.tensor, self.gt_mask_resolution)
-                            trg_value = trg_value.to(dtype = torch.float32)
-                            trg_value = trg_value.reshape(-1,1,self.gt_mask_resolution,self.gt_mask_resolution)
-                            pred_instances_per_image.set("pred_masks", trg_value)
+                            pred_instances_per_image.set(trg_name, trg_value)
                 else:
                     gt_boxes = Boxes(
                         targets_per_image.gt_boxes.tensor.new_zeros((len(matched_idxs), 4))

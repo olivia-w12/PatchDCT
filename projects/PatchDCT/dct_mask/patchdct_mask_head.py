@@ -16,7 +16,7 @@ from .mask_encoding import DctMaskEncoding
 
 
 @ROI_MASK_HEAD_REGISTRY.register()
-class MaskRCNNDCTHead8(BaseMaskRCNNHead):
+class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
     """
     A mask head with several conv layers, plus an upsample layer (with `ConvTranspose2d`).
     Predictions are made with a final 1x1 conv layer.
@@ -24,8 +24,8 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
 
     @configurable
     def __init__(self, input_shape: ShapeSpec, *, num_classes, dct_vector_dim, mask_size,
-                 mask_loss_para,
-                 dct_loss_type,
+                 fine_features_resolution,mask_size_assemble,patch_size,
+                 patch_dct_vector_dim,mask_loss_para,dct_loss_type,
                  conv_dims, conv_norm="", **kwargs):
         """
         NOTE: this interface is experimental.
@@ -40,20 +40,21 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
         """
         super().__init__(**kwargs)
         assert len(conv_dims) >= 1, "conv_dims have to be non-empty!"
+
+        self.patch_dct_vector_dim = patch_dct_vector_dim
+        self.mask_size_assemble = mask_size_assemble
+        self.patch_size = patch_size
+        self.num_classes = num_classes
+        self.hidden_features = 1024
         self.dct_vector_dim = dct_vector_dim
         self.mask_size = mask_size
-
-        self.scale = 14
-        self.ratio = 3
-        self.num_tasks = 80
-        self.hidden_features = 1024
-        self.dct_vector_dim_coarse = 300
-        self.dct_size = self.mask_size//self.scale
         self.dct_loss_type = dct_loss_type
         self.mask_loss_para = mask_loss_para
+        self.scale = self.mask_size // self.patch_size
+        self.ratio = fine_features_resolution // self.scale
 
-        self.dct_encoding_coarse = DctMaskEncoding(vec_dim=self.dct_vector_dim_coarse, mask_size=self.mask_size)
-        self.dct_encoding = DctMaskEncoding(vec_dim=self.dct_vector_dim, mask_size=self.dct_size)
+        self.dct_encoding_coarse = DctMaskEncoding(vec_dim=self.dct_vector_dim, mask_size=self.mask_size)
+        self.dct_encoding = DctMaskEncoding(vec_dim=self.patch_dct_vector_dim, mask_size=self.patch_size)
 
         self.conv_norm_relus = []
 
@@ -76,11 +77,11 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
 
 
         self.predictor = nn.Sequential(
-            nn.Linear(self.scale**2*conv_dim,self.hidden_features),
+            nn.Linear(14**2*conv_dim,self.hidden_features),
             nn.ReLU(),
             nn.Linear(self.hidden_features,self.hidden_features),
             nn.ReLU(),
-            nn.Linear(self.hidden_features,self.dct_vector_dim_coarse)
+            nn.Linear(self.hidden_features,self.dct_vector_dim)
         )
         self.reshape = Conv2d(
             1,
@@ -131,13 +132,13 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
         )
 
         self.predictor1 = Conv2d(self.hidden_features,
-                                               self.dct_vector_dim*self.num_tasks,
+                                               self.patch_dct_vector_dim*self.num_classes,
                                                kernel_size=1,
                                                stride=1,
                                                padding=0,
                                                )
         self.predictor_bfg = Conv2d(self.hidden_features,
-                                    3*self.num_tasks,
+                                    3*self.num_classes,
                                     kernel_size=1,
                                     stride=1,
                                     padding=0,
@@ -157,11 +158,13 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
             conv_norm=cfg.MODEL.ROI_MASK_HEAD.NORM,
             input_shape=input_shape,
             dct_vector_dim=cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM,
-
             mask_loss_para=cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_PARA,
             mask_size=cfg.MODEL.ROI_MASK_HEAD.MASK_SIZE,
             dct_loss_type=cfg.MODEL.ROI_MASK_HEAD.DCT_LOSS_TYPE,
-
+            fine_features_resolution = cfg.MODEL.ROI_MASK_HEAD.FINE_FEATURES_RESOLUTION,
+            mask_size_assemble = cfg.MODEL.ROI_MASK_HEAD.MASK_SIZE_ASSEMBLE,
+            patch_size = cfg.MODEL.ROI_MASK_HEAD.PATCH_SIZE,
+            patch_dct_vector_dim = cfg.MODEL.ROI_MASK_HEAD.PATCH_DCT_VECTOR_DIM,
         )
 
         if cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK:
@@ -182,13 +185,13 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
         masks = self.dct_encoding_coarse.decode(x).real.reshape(-1,1,self.mask_size,self.mask_size)
         masks = F.interpolate(masks,size = (self.scale*self.ratio,self.scale*self.ratio))
         masks = self.reshape(masks)
-        # fine_mask_features = torch.cat((masks,fine_mask_features),dim=1)
-        fine_mask_features = self.fusion(fine_mask_features+masks)
+        fine_mask_features = masks+fine_mask_features
+        fine_mask_features = self.fusion(fine_mask_features)
         fine_mask_features = self.downsample(fine_mask_features)
         detail = self.predictor1(fine_mask_features)
         bfg = self.predictor_bfg(fine_mask_features)
-        bfg = bfg.reshape(-1,self.num_tasks,3,self.scale,self.scale)
-        detail = detail.reshape(-1,self.num_tasks,self.dct_vector_dim,self.scale,self.scale)
+        bfg = bfg.reshape(-1,self.num_classes,3,self.scale,self.scale)
+        detail = detail.reshape(-1,self.num_classes,self.patch_dct_vector_dim,self.scale,self.scale)
         return x,bfg,detail
 
     def forward(self, x, fine_mask_features,instances: List[Instances]):
@@ -233,12 +236,12 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
         indice = torch.arange(num_instance)
 
         bfg = bfg[indice,gt_classes].permute(0,2,3,1).reshape(-1,3)
-        detail = detail[indice,gt_classes].permute(0,2,3,1).reshape(-1,self.dct_vector_dim)
+        detail = detail[indice,gt_classes].permute(0,2,3,1).reshape(-1,self.patch_dct_vector_dim)
 
 
         gt_bfg = gt_masks[:, 0].clone()
-        gt_bfg[(gt_bfg > 0) & (gt_bfg < self.dct_size)] = 1.
-        gt_bfg[gt_bfg == self.dct_size] = 2
+        gt_bfg[(gt_bfg > 0) & (gt_bfg < self.patch_size)] = 1.
+        gt_bfg[gt_bfg == self.patch_size] = 2
         gt_bfg = gt_bfg.to(dtype = torch.int64)
 
         gt_masks = gt_masks[gt_bfg==1,:]
@@ -300,26 +303,30 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
             num_masks = pred_classes.shape[0]
             indices = torch.arange(num_masks)
             bfg = bfg[indices,pred_classes].permute(0,2,3,1).reshape(-1,3)
-            detail = detail[indices,pred_classes].permute(0,2,3,1).reshape(-1,self.dct_vector_dim)
+            detail = detail[indices,pred_classes].permute(0,2,3,1).reshape(-1,self.patch_dct_vector_dim)
 
             with torch.no_grad():
                 bfg = F.softmax(bfg,dim=1)
-                bfg[bfg[:,0]>0.4,0] = bfg[bfg[:,0]>0.4,0]+1
-                bfg[bfg[:,2]>0.4,2] = bfg[bfg[:,2]>0.4,2]+1
+                threshold = 0.36
+                bfg[bfg[:,0]>threshold,0] = bfg[bfg[:,0]>threshold,0]+1
+                bfg[bfg[:,2]>threshold,2] = bfg[bfg[:,2]>threshold,2]+1
                 index = torch.argmax(bfg,dim=1)
 
-                detail[index == 0,::] = 0
-                detail[index == 2,::] = 0
-                detail[index==2,0] = self.dct_size
-
+                # ---------------------------gt-------------------------------
                 # gt_masks = self.get_gt_mask_inference(pred_instances, pred_mask_logits)
+                # gt_bfg = gt_masks[:, 0].clone()
+                # gt_bfg[(gt_bfg > 0) & (gt_bfg < self.patch_size)] = 1.
+                # gt_bfg[gt_bfg == self.patch_size] = 2
+                # gt_bfg = gt_bfg.to(dtype=torch.int64)
+                # ---------------------------gt-------------------------------
+
+                detail[index == 0, ::] = 0
+                detail[index == 2, ::] = 0
+                detail[index == 2, 0] = self.patch_size
 
                 pred_mask_rc = self.dct_encoding.decode(detail)
-                pred_mask_rc = pred_mask_rc.reshape(-1, self.scale, self.scale, self.dct_size, self.dct_size)
-                pred_mask_rc = pred_mask_rc.permute(0, 1, 2, 4, 3)
-                pred_mask_rc = pred_mask_rc.reshape(-1, self.scale, self.mask_size, self.dct_size)
-                pred_mask_rc = pred_mask_rc.permute(0, 1, 3, 2)
-                pred_mask_rc = pred_mask_rc.reshape(-1, self.mask_size, self.mask_size)
+                pred_mask_rc = self.patch2masks(pred_mask_rc,self.scale,self.patch_size,self.mask_size_assemble)
+
 
             pred_mask_rc = pred_mask_rc[:, None, :, :]
             pred_instances[0].pred_masks = pred_mask_rc
@@ -338,11 +345,9 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
                 instances_per_image.proposal_boxes.tensor, self.mask_size)
             gt_masks_coarse.append(gt_masks_per_image)
 
-            gt_masks_per_image = gt_masks_per_image.reshape(-1, self.scale, self.dct_size, self.mask_size)
-            gt_masks_per_image = gt_masks_per_image.permute(0, 1, 3, 2)
-            gt_masks_per_image = gt_masks_per_image.reshape(-1, self.scale, self.scale, self.dct_size, self.dct_size)
-            gt_masks_per_image = gt_masks_per_image.permute(0, 1, 2, 4, 3)
-            gt_masks_per_image = gt_masks_per_image.reshape(-1, self.dct_size, self.dct_size)
+            gt_masks_per_image = instances_per_image.gt_masks.crop_and_resize(
+                instances_per_image.proposal_boxes.tensor, self.mask_size_assemble)
+            gt_masks_per_image = self.masks2patch(gt_masks_per_image,self.scale,self.patch_size,self.mask_size_assemble)
 
             gt_masks.append(gt_masks_per_image)
 
@@ -353,7 +358,7 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
             return pred_mask_logits.sum() * 0
         gt_masks = cat(gt_masks, dim=0)
         gt_masks = self.dct_encoding.encode(gt_masks)  # [N, dct_v_dim]
-        gt_masks = gt_masks.to(dtype=torch.float32) #[N_instance,dct_vector_dim]
+        gt_masks = gt_masks.to(dtype=torch.float32) #[N_instance,pdct_vector_dim]
         gt_classes = cat(gt_classes, dim=0) #[N_instanc]
         gt_masks_coarse = cat(gt_masks_coarse,dim=0)
         gt_masks_coarse = self.dct_encoding_coarse.encode(gt_masks_coarse).to(dtype=torch.float32)
@@ -368,22 +373,14 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
                 continue
             if instances_per_image.has("gt_masks"):
                 gt_masks_per_image = instances_per_image.gt_masks.crop_and_resize(
-                    instances_per_image.pred_boxes.tensor, self.mask_size)
+                    instances_per_image.pred_boxes.tensor, self.mask_size_assemble)
             else:
                 #print("gt_mask is empty")
                 shape = instances_per_image.pred_boxes.tensor.shape[0]
                 device = instances_per_image.pred_boxes.tensor.device
-                gt_masks_per_image = torch.zeros((shape,self.mask_size,self.mask_size),dtype=torch.bool).to(device)
+                gt_masks_per_image = torch.zeros((shape,self.mask_size_assemble,self.mask_size_assemble),dtype=torch.bool).to(device)
 
-
-            #gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)  # [N, dct_v_dim]
-            #gt_masks.append(gt_masks_vector)
-            gt_masks_per_image = gt_masks_per_image.reshape(-1, self.scale, self.dct_size, self.mask_size)
-            gt_masks_per_image = gt_masks_per_image.permute(0, 1, 3, 2)
-            gt_masks_per_image = gt_masks_per_image.reshape(-1, self.scale, self.scale, self.dct_size, self.dct_size)
-            gt_masks_per_image = gt_masks_per_image.permute(0, 1, 2, 4, 3)
-
-            gt_masks_per_image = gt_masks_per_image.reshape(-1, self.dct_size, self.dct_size)
+            gt_masks_per_image = self.masks2patch(gt_masks_per_image,self.scale,self.patch_size,self.mask_size_assemble)
             gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)
             gt_masks.append((gt_masks_vector))
 
@@ -391,6 +388,21 @@ class MaskRCNNDCTHead8(BaseMaskRCNNHead):
             return pred_mask_logits.sum() * 0
 
         gt_masks = cat(gt_masks, dim=0)
-
         gt_masks = gt_masks.to(dtype=torch.float32)
         return gt_masks
+
+    def patch2masks(self,mask_rc,scale,patch_size,mask_size):
+        mask_rc = mask_rc.reshape(-1, scale, scale, patch_size, patch_size)
+        mask_rc = mask_rc.permute(0, 1, 2, 4, 3)
+        mask_rc = mask_rc.reshape(-1, scale, mask_size, patch_size)
+        mask_rc = mask_rc.permute(0, 1, 3, 2)
+        mask_rc = mask_rc.reshape(-1, mask_size, mask_size)
+        return mask_rc
+
+    def masks2patch(self,masks_per_image,scale,patch_size,mask_size):
+        masks_per_image = masks_per_image.reshape(-1, scale, patch_size,mask_size)
+        masks_per_image = masks_per_image.permute(0, 1, 3, 2)
+        masks_per_image = masks_per_image.reshape(-1, scale, scale, patch_size, patch_size)
+        masks_per_image = masks_per_image.permute(0, 1, 2, 4, 3)
+        masks_per_image = masks_per_image.reshape(-1,patch_size, patch_size)
+        return masks_per_image

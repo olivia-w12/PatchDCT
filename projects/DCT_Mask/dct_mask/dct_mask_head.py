@@ -39,19 +39,21 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
         """
         super().__init__(**kwargs)
         assert len(conv_dims) >= 1, "conv_dims have to be non-empty!"
-        self.dct_vector_dim = dct_vector_dim
+        self.calculate = 0
+        self.dct_vector_dim = 300
+        self.dct_vector_dim2 = dct_vector_dim
         self.mask_size = mask_size
         self.dct_loss_type = dct_loss_type
-        self.dct_size = 8
-        self.scale = self.mask_size//self.dct_size
+        self.scale = 7
+        self.dct_size = self.mask_size//self.scale
         self.mask_loss_para = mask_loss_para
         print("mask size: {}, dct_vector dim: {}, loss type: {}, mask_loss_para: {}".format(self.mask_size,
                                                                                             self.dct_vector_dim,
                                                                                             self.dct_loss_type,
                                                                                             self.mask_loss_para))
-        
+
         self.dct_encoding = DctMaskEncoding(vec_dim=dct_vector_dim, mask_size=mask_size)
-        self.dct_encoding1 = DctMaskEncoding(vec_dim=6, mask_size=self.dct_size)
+        self.dct_encoding1 = DctMaskEncoding(vec_dim=self.dct_vector_dim2, mask_size=self.dct_size)
         self.conv_norm_relus = []
 
         cur_channels = input_shape.channels
@@ -215,41 +217,25 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
             pred_instances[0].pred_masks = torch.empty([0, 1, self.mask_size, self.mask_size]).to(device)
             return pred_instances
         else:
-            pred_mask_rc = self.dct_encoding.decode(pred_mask_logits.detach()).real
-
-            mask = self.get_gt_mask_inference1(pred_instances, pred_mask_logits)
-            mask = self.dct_encoding1.decode(mask).real
-
-            pred_mask_rc[pred_mask_rc>=0.5] = 1
-            pred_mask_rc[pred_mask_rc<0.5] = 0
-            pred_mask_rc = pred_mask_rc[:, None, :, :]
-            # per_image = pred_mask_rc.reshape(-1, self.scale, self.dct_size, self.mask_size)
-            # per_image = per_image.permute(0, 1, 3, 2)
-            # per_image = per_image.reshape(-1, self.scale, self.scale, self.dct_size, self.dct_size)
-            # per_image = per_image.permute(0, 1, 2, 4, 3)
-            # per_image = per_image.reshape(-1, self.dct_size, self.dct_size)
-
-            index = F.adaptive_avg_pool2d(pred_mask_rc,self.scale)
-            index = index.reshape(-1)
-
-            mask[(index==1)|(index==0),:] = 0
-
-            mask = mask.reshape(-1, self.scale, self.scale, self.dct_size, self.dct_size)
-            mask = mask.permute(0, 1, 2, 4, 3)
-            mask = mask.reshape(-1, self.scale, self.mask_size, self.dct_size)
-            mask = mask.permute(0, 1, 3, 2)
-            mask = mask.reshape(-1,1,self.mask_size,self.mask_size)
+            with torch.no_grad():
+                pred_mask_logits_gt = self.get_gt_mask_inference1(pred_instances,pred_mask_logits)
+                pred_mask_logits_gt = self.dct_encoding1.decode(pred_mask_logits_gt)
+                pred_mask_logits_gt = self.reshape_detail(pred_mask_logits_gt)
+                pred_mask_rc = pred_mask_logits_gt
+                # pred_mask_rc = self.dct_encoding.decode(pred_mask_logits).real
+                # pred_mask_rc = pred_mask_rc[:,None,:,:]
 
 
-            pred_mask_rc[mask!=0] = 0
-            pred_mask_rc += mask
+                pred_instances[0].pred_masks = pred_mask_rc
 
-            pred_instances[0].pred_masks = pred_mask_rc
+                #Or:
+                # pred_instances[0].pred_masks = self.get_gt_mask_inference1(pred_instances,pred_mask_logits)
             return pred_instances
 
     def get_gt_mask_inference(self,instances,pred_mask_logits):
         gt_masks = []
-
+        gt_masks_1 = []
+        gt_masks_2 = []
         for instances_per_image in instances:
             if len(instances_per_image) == 0:
                 continue
@@ -262,20 +248,39 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
                 device = instances_per_image.pred_boxes.tensor.device
                 gt_masks_per_image = torch.zeros((shape,self.mask_size,self.mask_size),dtype=torch.bool).to(device)
 
-            # gt_masks_per_image = gt_masks_per_image.reshape(-1, self.scale, self.dct_size, self.mask_size)
-            # gt_masks_per_image = gt_masks_per_image.permute(0, 1, 3, 2)
-            # gt_masks_per_image = gt_masks_per_image.reshape(-1, self.scale, self.scale, self.dct_size, self.dct_size)
-            # gt_masks_per_image = gt_masks_per_image.permute(0, 1, 2, 4, 3)
-            # gt_masks_per_image = gt_masks_per_image.reshape(-1, self.dct_size, self.dct_size)
-            # gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)
-            # gt_masks.append((gt_masks_vector))
-            gt_masks.append(gt_masks_per_image.reshape(-1,1,self.mask_size,self.mask_size))
+            gt_masks_1_per_image = self.reshape_mask0(gt_masks_per_image,14,8)
+            gt_masks_2_per_image = self.reshape_mask0(gt_masks_per_image,7,16)
+
+            gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)
+            gt_masks.append((gt_masks_vector))
+
+            gt_masks_1_per_image = self.dct_encoding1.encode(gt_masks_1_per_image)
+            gt_masks_2_per_image = self.dct_encoding2.encode(gt_masks_2_per_image)
+            gt_masks_1.append(gt_masks_1_per_image)
+            gt_masks_2.append(gt_masks_2_per_image)
 
         if len(gt_masks) == 0:
             return pred_mask_logits.sum() * 0
         gt_masks = cat(gt_masks, dim=0)
         gt_masks = gt_masks.to(dtype=torch.float32)
+
+        gt_masks_1 = cat(gt_masks_1,dim=0).to(dtype=torch.float32)
+        gt_masks_2 = cat(gt_masks_2, dim=0).to(dtype=torch.float32)
+        # torch.save(gt_masks, "/home/wqr/detection/DCT-Mask/projects/dct_seperate_1_test/variance/112/{}.pth".format(
+        #     self.calculate))
+        # torch.save(gt_masks_1, "/home/wqr/detection/DCT-Mask/projects/dct_seperate_1_test/variance/8/{}.pth".format(
+        #     self.calculate))
+        # torch.save(gt_masks_2, "/home/wqr/detection/DCT-Mask/projects/dct_seperate_1_test/variance/16/{}.pth".format(
+        #     self.calculate))
         return gt_masks
+
+    def reshape_mask0(self,gt_masks_per_image,scale,dct_size):
+        gt_masks_per_image = gt_masks_per_image.reshape(-1, scale, dct_size, self.mask_size)
+        gt_masks_per_image = gt_masks_per_image.permute(0, 1, 3, 2)
+        gt_masks_per_image = gt_masks_per_image.reshape(-1, scale, scale, dct_size, dct_size)
+        gt_masks_per_image = gt_masks_per_image.permute(0, 1, 2, 4, 3)
+        gt_masks_per_image = gt_masks_per_image.reshape(-1, dct_size, dct_size)
+        return gt_masks_per_image
 
     def get_gt_mask_inference1(self,instances,pred_mask_logits):
         gt_masks = []
@@ -293,23 +298,28 @@ class MaskRCNNDCTHead(BaseMaskRCNNHead):
                 gt_masks_per_image = torch.zeros((shape,self.mask_size,self.mask_size),dtype=torch.float32).to(device)
 
 
-            #gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)  # [N, dct_v_dim]
-            #gt_masks.append(gt_masks_vector)
+            # gt_masks_vector = self.dct_encoding.encode(gt_masks_per_image)  # [N, dct_v_dim]
+            # gt_masks.append(gt_masks_vector)
             gt_masks_per_image = gt_masks_per_image.reshape(-1, self.scale, self.dct_size, self.mask_size)
             gt_masks_per_image = gt_masks_per_image.permute(0, 1, 3, 2)
             gt_masks_per_image = gt_masks_per_image.reshape(-1, self.scale, self.scale, self.dct_size, self.dct_size)
             gt_masks_per_image = gt_masks_per_image.permute(0, 1, 2, 4, 3)
 
             gt_masks_per_image = gt_masks_per_image.reshape(-1, self.dct_size, self.dct_size)
-            # gt_masks_vector = gt_masks_per_image.sum(dim=(1,2))/self.dct_size
-            # gt_masks.append((gt_masks_vector))
+            # # gt_masks_vector = gt_masks_per_image.sum(dim=(1,2))/self.dct_size
+            # # gt_masks.append((gt_masks_vector))
             gt_masks.append(gt_masks_per_image)
 
         if len(gt_masks) == 0:
             return pred_mask_logits.sum() * 0
-
-
         gt_masks = cat(gt_masks, dim=0)
         gt_masks = self.dct_encoding1.encode(gt_masks)
-        gt_masks = gt_masks.to(dtype=torch.float32)
         return gt_masks
+
+    def reshape_detail(self,pred_mask_rc):
+        pred_mask_rc = pred_mask_rc.reshape(-1, self.scale, self.scale, self.dct_size, self.dct_size)
+        pred_mask_rc = pred_mask_rc.permute(0, 1, 2, 4, 3)
+        pred_mask_rc = pred_mask_rc.reshape(-1, self.scale, self.mask_size, self.dct_size)
+        pred_mask_rc = pred_mask_rc.permute(0, 1, 3, 2)
+        pred_mask_rc = pred_mask_rc.reshape(-1, 1,self.mask_size, self.mask_size)
+        return pred_mask_rc

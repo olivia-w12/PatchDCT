@@ -22,7 +22,7 @@ from detectron2.modeling.roi_heads.roi_heads import select_proposals_with_visibl
 
 
 @ROI_HEADS_REGISTRY.register()
-class ROIHeads_MASK_DIFFER(ROIHeads):
+class PatchDCTROIHeads_withGT(ROIHeads):
     """
     It's "standard" in a sense that there is no ROI transform sharing
     or feature sharing between tasks.
@@ -251,7 +251,10 @@ class ROIHeads_MASK_DIFFER(ROIHeads):
             return proposals, losses
         else:
             pred_instances = self._forward_box(features, proposals)
+
+            #for model analyze,delete this row
             pred_instances = self.match_gt_to_pred_boxes(targets, pred_instances)
+
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)

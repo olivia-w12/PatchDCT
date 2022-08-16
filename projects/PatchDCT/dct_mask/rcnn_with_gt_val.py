@@ -4,7 +4,7 @@ from detectron2.modeling.meta_arch.rcnn import GeneralizedRCNN
 from detectron2.modeling.meta_arch.build import META_ARCH_REGISTRY
 
 @META_ARCH_REGISTRY.register()
-class GeneralizedRCNN_TEST(GeneralizedRCNN):
+class GeneralizedRCNN_WithGTval(GeneralizedRCNN):
     """
     the inference is modified
     """

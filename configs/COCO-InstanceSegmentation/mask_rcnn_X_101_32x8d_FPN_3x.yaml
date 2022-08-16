@@ -1,7 +1,7 @@
 _BASE_: "../Base-RCNN-FPN.yaml"
 MODEL:
   MASK_ON: True
-  WEIGHTS: "detectron2://ImageNetPretrained/FAIR/X-101-32x8d.pkl"
+  WEIGHTS: "./checkpoints/mask_rcnn_rx101.pkl"
   PIXEL_STD: [57.375, 57.120, 58.395]
   RESNETS:
     STRIDE_IN_1X1: False  # this is a C2 model
@@ -11,3 +11,4 @@ MODEL:
 SOLVER:
   STEPS: (210000, 250000)
   MAX_ITER: 270000
+OUTPUT_DIR: "output/mask_rcnn_rx101/"

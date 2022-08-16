@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
 import numpy as np
 from typing import Dict
 import torch
@@ -37,7 +37,7 @@ def calculate_uncertainty(sem_seg_logits):
 class PointRendSemSegHead(nn.Module):
     """
     A semantic segmentation head that combines a head set in `POINT_HEAD.COARSE_SEM_SEG_HEAD_NAME`
-        and a point head set in `MODEL.POINT_HEAD.NAME`.
+    and a point head set in `MODEL.POINT_HEAD.NAME`.
     """
 
     def __init__(self, cfg, input_shape: Dict[str, ShapeSpec]):
@@ -62,7 +62,7 @@ class PointRendSemSegHead(nn.Module):
         self.subdivision_num_points  = cfg.MODEL.POINT_HEAD.SUBDIVISION_NUM_POINTS
         # fmt: on
 
-        in_channels = np.sum([feature_channels[f] for f in self.in_features])
+        in_channels = int(np.sum([feature_channels[f] for f in self.in_features]))
         self.point_head = build_point_head(cfg, ShapeSpec(channels=in_channels, width=1, height=1))
 
     def forward(self, features, targets=None):
@@ -85,7 +85,8 @@ class PointRendSemSegHead(nn.Module):
                 [
                     point_sample(features[in_feature], point_coords, align_corners=False)
                     for in_feature in self.in_features
-                ]
+                ],
+                dim=1,
             )
             point_logits = self.point_head(fine_grained_features, coarse_features)
             point_targets = (

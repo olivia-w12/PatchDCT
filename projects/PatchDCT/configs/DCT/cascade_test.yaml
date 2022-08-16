@@ -1,6 +1,6 @@
 _BASE_: "../Base-RCNN-FPN-DCT.yaml"
 MODEL:
-  WEIGHTS: "output/DCT_casecade_RX101_3x_mask128x128_300_l1_007_4conv.yaml/model_final.pth"
+  WEIGHTS: "./output/DCT_casecade_RX101_3x_mask128x128_300_l1_007_4conv.yaml/model_0119999.pth"
   MASK_ON: True
   PIXEL_STD: [57.375, 57.120, 58.395]
   RESNETS:
