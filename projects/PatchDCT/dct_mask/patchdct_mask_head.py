@@ -32,11 +32,18 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
 
         Args:
             input_shape (ShapeSpec): shape of the input feature
-            num_classes (int): the number of classes. 1 if using class agnostic prediction.
+            num_classes (int): the number of classes. 1 if using class agnostic prediction.For COCO,num_classes=80
             conv_dims (list[int]): a list of N>0 integers representing the output dimensions
                 of N-1 conv layers and the last upsample layer.
             conv_norm (str or callable): normalization for the conv layers.
                 See :func:`detectron2.layers.get_norm` for supported types.
+            dct_vector_dim: dct vector dim in DCT_MASK(default=300)
+            mask_size: resolution of mask to be refined(default=112)
+            fine_features_resolution: feature map in PatchDCT(default 42x42)
+            mask_size_assemble: mask size in PatchDCT(default=112)
+            patch_size: patch size(default=8)
+            patch_dct_vector_dim: DCT vector dim for each patch
+
         """
         super().__init__(**kwargs)
         assert len(conv_dims) >= 1, "conv_dims have to be non-empty!"
@@ -174,15 +181,34 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         return ret
 
     def layers(self, x,fine_mask_features):
+        """
+
+        Args:
+            x: feature map used in DCT-Mask
+            fine_mask_features: feature map used in PatchDCT
+
+        Returns:
+            x (Tensor): [B, D]. D is dct-dim. [B, D]. DCT_Vector in DCT-Mask.
+            bfg: A tensor of shape [B,num_class,3,scale,scale].
+                A NxN masks is divided into scale x scale patches.
+                bfg demonstrates results of three-class classifier in PatchDCT
+                0 for foreground,1 for mixed,2 for background
+            detail : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale].
+                    DCT vector for each patch (only calculate loss for mixed patch)
+        """
         for layer in self.conv_norm_relus:
             x = layer(x)
-
+        #------------------------------DCT-Mask--------------------------
         x = self.predictor(x.flatten(start_dim=1))
         if not self.training:
             num_masks = x.shape[0]
             if num_masks==0:
                 return x,0,0
+        #reverse transform to obtain high-resolution masks
         masks = self.dct_encoding_coarse.decode(x).real.reshape(-1,1,self.mask_size,self.mask_size)
+        # ------------------------------DCT-Mask--------------------------
+
+        # ------------------------------PatchDCT--------------------------
         masks = F.interpolate(masks,size = (self.scale*self.ratio,self.scale*self.ratio))
         masks = self.reshape(masks)
         fine_mask_features = masks+fine_mask_features
@@ -192,6 +218,7 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         bfg = self.predictor_bfg(fine_mask_features)
         bfg = bfg.reshape(-1,self.num_classes,3,self.scale,self.scale)
         detail = detail.reshape(-1,self.num_classes,self.patch_dct_vector_dim,self.scale,self.scale)
+        # ------------------------------PatchDCT--------------------------
         return x,bfg,detail
 
     def forward(self, x, fine_mask_features,instances: List[Instances]):
@@ -220,8 +247,13 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         Compute the mask prediction loss defined in the Mask R-CNN paper.
 
         Args:
-            pred_mask_logits (Tensor): [B, D]. D is dct-dim. [B, D]. DCT_Vector.
-            
+            pred_mask_logits (Tensor): [B, D]. D is dct-dim. [B, D]. DCT_Vector in DCT-Mask.
+            bfg: A tensor of shape [B,num_class,3,scale,scale].
+                A NxN masks is divided into scale x scale patches.
+                bfg demonstrates results of three-class classifier in PatchDCT
+                0 for foreground,1 for mixed,2 for background
+            detail : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale].
+                    DCT vector for each patch (only calculate loss for mixed patch)
             instances (list[Instances]): A list of N Instances, where N is the number of images
                 in the batch. These instances are in 1:1
                 correspondence with the pred_mask_logits. The ground-truth labels (class, box, mask,
@@ -281,6 +313,12 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
                 for class-specific or class-agnostic, where B is the total number of predicted masks
                 in all images, C is the number of foreground classes, and Hmask, Wmask are the height
                 and width of the mask predictions. The values are logits.
+            bfg: A tensor of shape [B,num_class,3,scale,scale].
+                A NxN masks is divided into scale x scale patches.
+                bfg demonstrates results of three-class classifier in PatchDCT
+                0 for foreground,1 for mixed,2 for background
+            detail : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale].
+                    DCT vector for each patch (only calculate loss for mixed patch)
             pred_instances (list[Instances]): A list of N Instances, where N is the number of images
                 in the batch. Each Instances must have field "pred_classes".
 
@@ -307,7 +345,7 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
 
             with torch.no_grad():
                 bfg = F.softmax(bfg,dim=1)
-                threshold = 0.36
+                threshold = 0.3
                 bfg[bfg[:,0]>threshold,0] = bfg[bfg[:,0]>threshold,0]+1
                 bfg[bfg[:,2]>threshold,2] = bfg[bfg[:,2]>threshold,2]+1
                 index = torch.argmax(bfg,dim=1)
@@ -325,6 +363,7 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
                 detail[index == 2, 0] = self.patch_size
 
                 pred_mask_rc = self.dct_encoding.decode(detail)
+                # assemble patches to obtain an entire mask
                 pred_mask_rc = self.patch2masks(pred_mask_rc,self.scale,self.patch_size,self.mask_size_assemble)
 
 
@@ -347,6 +386,7 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
 
             gt_masks_per_image = instances_per_image.gt_masks.crop_and_resize(
                 instances_per_image.proposal_boxes.tensor, self.mask_size_assemble)
+            # divided masks into scalexscale patch,patch size=8
             gt_masks_per_image = self.masks2patch(gt_masks_per_image,self.scale,self.patch_size,self.mask_size_assemble)
 
             gt_masks.append(gt_masks_per_image)
@@ -391,18 +431,41 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         gt_masks = gt_masks.to(dtype=torch.float32)
         return gt_masks
 
-    def patch2masks(self,mask_rc,scale,patch_size,mask_size):
-        mask_rc = mask_rc.reshape(-1, scale, scale, patch_size, patch_size)
-        mask_rc = mask_rc.permute(0, 1, 2, 4, 3)
-        mask_rc = mask_rc.reshape(-1, scale, mask_size, patch_size)
-        mask_rc = mask_rc.permute(0, 1, 3, 2)
-        mask_rc = mask_rc.reshape(-1, mask_size, mask_size)
-        return mask_rc
+    def patch2masks(self,patch,scale,patch_size,mask_size):
+        """
+        assemble patches to obtain an entire mask
+        Args:
+            mask_rc: A tensor of shape [B*num_patch,patch_size,patch_size]
+            scale: A NxN mask size is divided into scale x scale patches
+            patch_size: size of each patch
+            mask_size: size of masks generated by PatchDCT
+
+        Returns:
+            A tensor of shape [B,mask_size,mask_size].The masks obtain assemble by patches
+        """
+        patch = patch.reshape(-1, scale, scale, patch_size, patch_size)
+        patch = patch.permute(0, 1, 2, 4, 3)
+        patch = patch.reshape(-1, scale, mask_size, patch_size)
+        patch = patch.permute(0, 1, 3, 2)
+        mask = patch.reshape(-1, mask_size, mask_size)
+        return mask
 
     def masks2patch(self,masks_per_image,scale,patch_size,mask_size):
+        """
+
+        Args:
+            masks_per_image: A tensor of shape [B,mask_size,mask_size]
+            scale: A NxN mask size is divided into scale x scale patches
+            patch_size: size of each patch
+            mask_size: size of masks generated by PatchDCT
+
+        Returns:
+            patches_per_image: A tensor of shape [B*num_patch,patch_size,patch_size]. The patches obtained by masks
+
+        """
         masks_per_image = masks_per_image.reshape(-1, scale, patch_size,mask_size)
         masks_per_image = masks_per_image.permute(0, 1, 3, 2)
         masks_per_image = masks_per_image.reshape(-1, scale, scale, patch_size, patch_size)
         masks_per_image = masks_per_image.permute(0, 1, 2, 4, 3)
-        masks_per_image = masks_per_image.reshape(-1,patch_size, patch_size)
-        return masks_per_image
+        patches_per_image = masks_per_image.reshape(-1,patch_size, patch_size)
+        return patches_per_image
