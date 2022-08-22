@@ -1,7 +1,9 @@
 from .config import add_dctmask_config
-from .mask_encoding import DctMaskEncoding
+# from .mask_encoding import DctMaskEncoding
+from .mask_encoding_V2 import DctMaskEncodingV2
 from .patchdct_roi_heads import PatchDCTROIHeads
+from .dct import dct_2d,idct_2d
 from .patchdct_mask_head import MaskRCNNPatchDCTHead
-# from .rcnn_with_gt_val import GeneralizedRCNN_WithGTval
-# from .cascade_rcnn_dct import CascadeROIHeads_DCT
-# from .roi_heads_3_stage import ROIHeads_MASK_DIFFER_3_stage
+from .patchdct_mask_head_2stage_the_same_head import MaskRCNNPatchDCTHead2
+from .patchdct_mask_head_without_classifier import MaskRCNNPatchDCTHead_without_classifier
+from .patchdct_mask_head_refine_DCT_vectors import MaskRCNNPatchDCTHead_refine_DCT_vectors
