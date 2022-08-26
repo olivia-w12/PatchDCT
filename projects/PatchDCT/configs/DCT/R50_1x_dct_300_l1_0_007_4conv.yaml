@@ -28,7 +28,7 @@ MODEL:
     NUM_FC: 2
     POOLER_RESOLUTION: 7
   ROI_MASK_HEAD:
-    NAME: "MaskRCNNPatchDCTHead_without_classifier"
+    NAME: "MaskRCNNPatchDCTHead_NSTAGE"
     NUM_CONV: 4
     CLS_AGNOSTIC_MASK: False
     IN_FEATURES: ["p2"]
@@ -41,6 +41,8 @@ MODEL:
     PATCH_SIZE: 8
     PATCH_DCT_VECTOR_DIM: 6
     MASK_LOSS_PARA: 1.0
+    NUM_STAGE: 2
+    MASK_LOSS_PARA_EACH_STAGE: [ 0.5,0.5,0.8 ]
     DCT_LOSS_TYPE: "l1"
   WEIGHTS: "./checkpoints/R-50.pkl"
   MASK_ON: True
