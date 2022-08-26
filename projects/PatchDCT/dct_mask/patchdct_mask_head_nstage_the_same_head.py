@@ -58,7 +58,7 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
         self.mask_loss_para = mask_loss_para
         self.scale = self.mask_size // self.patch_size
         self.ratio = fine_features_resolution // self.scale
-        self.num_stage = num_stage
+        self.num_stage = num_stage-1
         self.loss_para = mask_loss_para_each_stage
 
         self.dct_encoding_coarse = DctMaskEncoding(vec_dim=self.dct_vector_dim, mask_size=self.mask_size)

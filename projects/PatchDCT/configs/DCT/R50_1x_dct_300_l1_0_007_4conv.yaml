@@ -41,7 +41,7 @@ MODEL:
     PATCH_SIZE: 8
     PATCH_DCT_VECTOR_DIM: 6
     MASK_LOSS_PARA: 1.0
-    NUM_STAGE: 2
+    NUM_STAGE: 3
     MASK_LOSS_PARA_EACH_STAGE: [ 0.5,0.5,0.8 ]
     DCT_LOSS_TYPE: "l1"
   WEIGHTS: "./checkpoints/R-50.pkl"
