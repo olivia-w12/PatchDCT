@@ -30,7 +30,7 @@ MODEL:
     NAME: "MaskRCNNPatchDCTHead_refine_DCT_vectors"
     NUM_CONV: 4
     CLS_AGNOSTIC_MASK: False
-    IN_FEATURES: [ "p2" ]
+    IN_FEATURES: ["p2", "p3", "p4", "p5"]
     POOLER_RESOLUTION: 14
     FINE_FEATURES: [ "p2" ]
     FINE_FEATURES_RESOLUTION: 42
