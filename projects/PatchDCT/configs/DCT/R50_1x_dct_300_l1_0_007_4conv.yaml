@@ -28,10 +28,10 @@ MODEL:
     NUM_FC: 2
     POOLER_RESOLUTION: 7
   ROI_MASK_HEAD:
-    NAME: "MaskRCNNPatchDCTHead_NSTAGE"
+    NAME: "MaskRCNNPatchDCTHead"
     NUM_CONV: 4
     CLS_AGNOSTIC_MASK: False
-    IN_FEATURES: ["p2"]
+    IN_FEATURES: ["p2", "p3", "p4", "p5"]
     POOLER_RESOLUTION: 14
     FINE_FEATURES: ["p2"]
     FINE_FEATURES_RESOLUTION: 42
@@ -44,7 +44,7 @@ MODEL:
     NUM_STAGE: 3
     MASK_LOSS_PARA_EACH_STAGE: [ 0.5,0.5,0.8 ]
     DCT_LOSS_TYPE: "l1"
-  WEIGHTS: "./checkpoints/R-50.pkl"
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: True
 DATASETS:
   TRAIN: ("coco_2017_train",)
