@@ -22,32 +22,35 @@ MODEL:
   ROI_HEADS:
     NAME: "PatchDCTROIHeads"
     IN_FEATURES: ["p2", "p3", "p4", "p5"]
+    NUM_CLASSES: 80
   ROI_BOX_HEAD:
     NAME: "FastRCNNConvFCHead"
     NUM_FC: 2
     POOLER_RESOLUTION: 7
   ROI_MASK_HEAD:
-    NAME: "MaskRCNNPatchDCTHead_refine_DCT_vectors"
+    NAME: "MaskRCNNPatchDCTHead_deconv"
     NUM_CONV: 4
     CLS_AGNOSTIC_MASK: False
     IN_FEATURES: ["p2", "p3", "p4", "p5"]
     POOLER_RESOLUTION: 14
-    FINE_FEATURES: [ "p2" ]
-    FINE_FEATURES_RESOLUTION: 42
+    FINE_FEATURES: ["p2"]
+    FINE_FEATURES_RESOLUTION: 56
     MASK_SIZE: 112
     DCT_VECTOR_DIM: 300
     MASK_SIZE_ASSEMBLE: 112
     PATCH_SIZE: 8
     PATCH_DCT_VECTOR_DIM: 6
     MASK_LOSS_PARA: 1.0
+    NUM_STAGE: 2
+    MASK_LOSS_PARA_EACH_STAGE: [0.5,0.5,0.8]
     DCT_LOSS_TYPE: "l1"
   WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: True
 DATASETS:
   TRAIN: ("coco_2017_train",)
-  TEST: ("coco_2017_val",  "lvis_v0.5_val_cocofied")
+  TEST: ("coco_2017_val","lvis_v0.5_val_cocofied")
 SOLVER:
-  IMS_PER_BATCH: 16
+  IMS_PER_BATCH: 4
   BASE_LR: 0.02
   STEPS: (60000,80000)
   MAX_ITER: 90000
@@ -56,4 +59,4 @@ INPUT:
   MASK_FORMAT: "polygon"
   MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
 VERSION: 2
-OUTPUT_DIR: "output/refine_DCT_vectors/"
+OUTPUT_DIR: "output/deconv_112x112/"

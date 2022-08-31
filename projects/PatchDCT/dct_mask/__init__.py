@@ -6,3 +6,4 @@ from .dct import dct_2d,idct_2d
 from .patchdct_mask_head import MaskRCNNPatchDCTHead
 from .patchdct_mask_head_nstage_the_same_head import MaskRCNNPatchDCTHead_NSTAGE
 from .patchdct_mask_head_refine_DCT_vectors import MaskRCNNPatchDCTHead_refine_DCT_vectors
+from .patchdct_mask_head_deconv import MaskRCNNPatchDCTHead_deconv

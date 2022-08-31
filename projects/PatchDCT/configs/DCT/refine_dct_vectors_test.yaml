@@ -30,7 +30,7 @@ MODEL:
     NAME: "MaskRCNNPatchDCTHead_refine_DCT_vectors"
     NUM_CONV: 4
     CLS_AGNOSTIC_MASK: False
-    IN_FEATURES: ["p2", "p3", "p4", "p5"]
+    IN_FEATURES: [ "p2" ]
     POOLER_RESOLUTION: 14
     FINE_FEATURES: [ "p2" ]
     FINE_FEATURES_RESOLUTION: 42
@@ -41,13 +41,13 @@ MODEL:
     PATCH_DCT_VECTOR_DIM: 6
     MASK_LOSS_PARA: 1.0
     DCT_LOSS_TYPE: "l1"
-  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  WEIGHTS: "./output/refine_DCT_vectors/model_final.pth"
   MASK_ON: True
 DATASETS:
   TRAIN: ("coco_2017_train",)
-  TEST: ("coco_2017_val",  "lvis_v0.5_val_cocofied")
+  TEST: ("coco_2017_val","lvis_v0.5_val_cocofied")
 SOLVER:
-  IMS_PER_BATCH: 16
+  IMS_PER_BATCH: 4
   BASE_LR: 0.02
   STEPS: (60000,80000)
   MAX_ITER: 90000
