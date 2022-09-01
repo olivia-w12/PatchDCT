@@ -60,4 +60,4 @@ INPUT:
   MAX_SIZE_TRAIN: 2048
   MAX_SIZE_TEST: 2048
 VERSION: 2
-OUTPUT_DIR: "output/city_r50_3/"
+OUTPUT_DIR: "output/city_r50_4_para_1.0/"

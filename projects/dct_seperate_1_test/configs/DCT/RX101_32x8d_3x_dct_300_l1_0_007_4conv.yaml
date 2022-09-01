@@ -49,7 +49,7 @@ MODEL:
   MASK_ON: True
 DATASETS:
   TRAIN: ("coco_2017_train",)
-  TEST: ("coco_2017_test-dev",) # "lvis_v0.5_val_cocofied")
+  TEST: ("coco_2017_test-dev","lvis_v0.5_val_cocofied")
 SOLVER:
   IMS_PER_BATCH: 16
   BASE_LR: 0.02
