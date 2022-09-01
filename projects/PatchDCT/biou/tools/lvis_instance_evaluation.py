@@ -24,7 +24,7 @@ import os
 
 import numpy as np
 
-from boundary_iou.lvis_instance_api.eval import LVISEval
+from biou.boundary_iou.lvis_instance_api.eval import LVISEval
 
 
 def main():
