@@ -8,7 +8,7 @@ from collections import OrderedDict
 import torch
 from fvcore.common.file_io import PathManager
 from PIL import Image
-
+from biou import boundary_iou
 from detectron2.data import MetadataCatalog
 from detectron2.utils import comm
 
@@ -39,6 +39,7 @@ class CityscapesEvaluator(DatasetEvaluator):
         self._temp_dir = comm.all_gather(self._temp_dir)[0]
         if self._temp_dir != self._working_dir.name:
             self._working_dir.cleanup()
+        #self._temp_dir = "/home/wqr/detection/DCT-Mask/projects/dct_seperate_1_test/patchdct_2stage_city"
         self._logger.info(
             "Writing cityscapes results to temporary directory {} ...".format(self._temp_dir)
         )
@@ -87,7 +88,10 @@ class CityscapesInstanceEvaluator(CityscapesEvaluator):
         if comm.get_rank() > 0:
             return
         import cityscapesscripts.evaluation.evalInstanceLevelSemanticLabeling as cityscapes_eval
-
+        #----------------boundary evaluate----------------------------
+        # import biou.boundary_iou.cityscapes_instance_api.evalInstanceLevelSemanticLabeling as cityscapes_eval
+        # cityscapes_eval.args.iou_type = "boundary"
+        # ----------------boundary evaluate----------------------------
         self._logger.info("Evaluating results under {} ...".format(self._temp_dir))
 
         # set some global states in cityscapes evaluation API, before evaluating

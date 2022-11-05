@@ -4,4 +4,4 @@ MODEL:
   MASK_ON: True
   RESNETS:
     DEPTH: 50
-OUTPUT_DIR: "output/visualize/"
+OUTPUT_DIR: "output/r50/"

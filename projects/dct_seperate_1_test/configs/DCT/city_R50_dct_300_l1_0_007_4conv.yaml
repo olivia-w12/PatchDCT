@@ -28,7 +28,7 @@ MODEL:
     NUM_FC: 2
     POOLER_RESOLUTION: 7
   ROI_MASK_HEAD:
-    NAME: "MaskRCNNPatchDCTHead2stage"
+    NAME: "MaskRCNNPatchDCTHead"
     NUM_CONV: 4
     CLS_AGNOSTIC_MASK: False
     IN_FEATURES: ["p2", "p3", "p4", "p5"]
@@ -42,7 +42,7 @@ MODEL:
     PATCH_DCT_VECTOR_DIM: 6
     MASK_LOSS_PARA: 1.0
     DCT_LOSS_TYPE: "l1"
-  WEIGHTS: "./checkpoints/R-50.pkl"
+  WEIGHTS: "./output/city_382/model_final2.pth"
   MASK_ON: True
 DATASETS:
   TRAIN: ("cityscapes_fine_instance_seg_train",)
@@ -60,4 +60,4 @@ INPUT:
   MAX_SIZE_TRAIN: 2048
   MAX_SIZE_TEST: 2048
 VERSION: 2
-OUTPUT_DIR: "output/city_r50_4_para_1.0/"
+OUTPUT_DIR: "output/city_382/"

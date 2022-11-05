@@ -53,3 +53,5 @@ wheels/
 /projects/PointRend
 /projects/TensorMask
 /projects/TridenNet
+/visual
+/checkpoints

@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import torch_dct
+from .dct import dct_2d,idct_2d
 
 
 class DctMaskEncoding(object):
@@ -26,7 +26,7 @@ class DctMaskEncoding(object):
         else:
             dct_vector_coords = self.dct_vector_coords[:dim]
         masks = masks.view([-1, self.mask_size, self.mask_size]).to(dtype=float)  # [N, H, W]
-        dct_all = torch_dct.dct_2d(masks, norm='ortho')
+        dct_all = dct_2d(masks, norm='ortho')
         xs, ys = dct_vector_coords[:, 0], dct_vector_coords[:, 1]
         dct_vectors = dct_all[:, xs, ys]  # reshape as vector
         return dct_vectors  # [N, D]
@@ -37,6 +37,7 @@ class DctMaskEncoding(object):
         output: mask_rc mask reconstructed [N, mask_size, mask_size]
         """
         device = dct_vectors.device
+
         if dim is None:
             dct_vector_coords = self.dct_vector_coords[:self.vec_dim]
         else:
@@ -47,7 +48,7 @@ class DctMaskEncoding(object):
         dct_trans = torch.zeros([N, self.mask_size, self.mask_size], dtype=dct_vectors.dtype).to(device)
         xs, ys = dct_vector_coords[:, 0], dct_vector_coords[:, 1]
         dct_trans[:, xs, ys] = dct_vectors
-        mask_rc = torch_dct.idct_2d(dct_trans, norm='ortho')  # [N, mask_size, mask_size]
+        mask_rc = idct_2d(dct_trans, norm='ortho')  # [N, mask_size, mask_size]
         return mask_rc
 
     def get_dct_vector_coords(self, r=128):

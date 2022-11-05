@@ -174,7 +174,7 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
             patch_size = cfg.MODEL.ROI_MASK_HEAD.PATCH_SIZE,
             patch_dct_vector_dim = cfg.MODEL.ROI_MASK_HEAD.PATCH_DCT_VECTOR_DIM,
             num_stage = cfg.MODEL.ROI_MASK_HEAD.NUM_STAGE,
-            mask_loss_para_each_stage = [0.5,0.5,0.8]
+            mask_loss_para_each_stage = cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_PARA_EACH_STAGE
         )
 
         if cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK:
