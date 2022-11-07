@@ -8,6 +8,7 @@ The speeds using one-stage PatchDCT and two-stage PatchDCT with R50-FPN are show
 |----------------|-------------------------------|-----------------------------|-----------------------------|-----------------------------|
 |one-stage|37.2|40.8|5.1|11.8
 |two-stage|37.4|41.2|9.6|8.4
+
 We observe that although two-stage PatchDCT achieves a certain improvement over one-stage PatchDCT, the computational cost increases and the inference speed reduces.
  
 
