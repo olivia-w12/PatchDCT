@@ -39,6 +39,7 @@ However, as discribed in DCT-Mask, predicting $112\times 112$ masks with the bin
 
 **A3:**
  To our knowledge we find no rectangle holes in the visualization progress on COCO 2017val. We note that Mask RCNN is already able to predict approximate binary masks, and a main reason of its limited performance is due to the imprecise segmentation around instance boundaries(refer to [1]). Also shown in Table 1 in [1], correcting mis-predicted pixels  within 1px of the boundary will give a boost to model performance, i.e 36.4 AP to 45.8 AP. Mask-RCNN predict $28\times28 =784$ values, while our three-class classifier has only $14\times 14\times 3 = 588$ values to predict. The training  complexity is not high and we have masks decoded from $300$-dimensional DCT vectors to provide auxiliary information. Therefore, we have reason to believe that the model is able to avoid the risk of rectangle holes caused by the three-category prediction.
+ 
  [1]Tang C, Chen H, Li X, et al. Look closer to segment better: Boundary patch refinement for instance segmentation[C]//Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. 2021: 13926-13935.
 
 **Q4: If  $N$  and  $n$  are the same notation, please make them consistent.**
