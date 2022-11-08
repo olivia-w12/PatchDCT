@@ -13,6 +13,7 @@ PointRend|RX101-FPN|41.4|11.4
 RefineMask|RX101-FPN|41.8|7.6
 PatchDCT|R101-FPN|40.7|11.8
 PatchDCT|R101-FPN|42.2|11.7
+
 All the models expect SOLQ are trained using '3x' schedules (~36 epochs) on COCO 2017val. SOLQ is trained using 50 epochs.
 The speed of PatchDCT is competitive compared to other multi-stage refinement methods.
 **A1.2:**
@@ -47,6 +48,7 @@ PointRend|RX101-FPN|41.4|11.4
 RefineMask|RX101-FPN|41.8|7.6
 PatchDCT|R101-FPN|40.7|11.8
 PatchDCT|R101-FPN|42.2|11.7
+
 All the models expect SOLQ are trained using '3x' schedules (~36 epochs) on COCO 2017val. SOLQ is trained using 50 epochs.
 
 **Q2: In this paper, the result in Table 1 suggests that when using 1x1 patch and 1-dim DCT vector the network has the best performance (57.6 AP). But when encoding 1x1 patch (single-pixel) using DCT, the result should be the value of the pixel itself. What is the difference between this method and directly refining the mask with 1x1 conv when the patch size is 1x1? I think this result is inconsistent with DCT-Mask, nor "binary grid refinement". According to DCT-Mask (Table 1), directly increasing the resolution decreases the mask AP, which is the main reason they use DCT encoding.**
@@ -80,3 +82,12 @@ In the latest version we refer to these related works in Section 2 and compare t
 
 **A4:** 
 $N$ is the dimension of the DCT vector of the entire mask and $n$ is the dimension of patch DCT vectors. We set $N=300$ and $n=6$ in the paper. Therefore, $N$ and $n$ are not the same notation.
+
+
+
+
+
+
+
+
+
