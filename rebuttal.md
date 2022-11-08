@@ -1,13 +1,27 @@
 # Response to Reviewer NpMa (8: accept, good paper)
 **Q1: Can the paper describes more on the speed advantages compared to previous SOTA methods? What's the speed of using one-stage PatchDCT and two-stage PatchDCT respectively?**
-**A1:**
 **A1.1**
+In the latest version we update the speed comparison with other SOTA methods in Table 4 and add supplemental description in Section 4(refer to the red part in Table 4 and Section 4). Runtime is measured on a single A100. We list a brief version of Table 4 below to present our advantages of speed.
+|Method| Backbone |AP|FPS                        
+|----------------|-------------------------------|-----------------------------|-----------------------------|
+Mask RCNN|R101-FPN|38.8|13.8
+DCT-Mask|R101-FPN|40.1|13.0
+MaskTransfiner|R101-FPN|40.7|5.5
+SOLQ|R101-FPN|40.9|10.7
+HTC|RX101-FPN|41.2|4.7
+PointRend|RX101-FPN|41.4|11.4
+RefineMask|RX101-FPN|41.8|7.6
+PatchDCT|R101-FPN|40.7|11.8
+PatchDCT|R101-FPN|42.2|11.7
+All the models expect SOLQ are trained using '3x' schedules (~36 epochs) on COCO 2017val. SOLQ is trained using 50 epochs.
+The speed of PatchDCT is competitive compared to other multi-stage refinement methods.
 **A1.2:**
 The speeds using one-stage PatchDCT and two-stage PatchDCT with R50-FPN are shown in the Table below:
 |Method|AP|AP$^*$|(G)FLOPs|FPS                        
 |----------------|-------------------------------|-----------------------------|-----------------------------|-----------------------------|
 |one-stage|37.2|40.8|5.1|11.8
 |two-stage|37.4|41.2|9.6|8.4
+
 
 We observe that although two-stage PatchDCT achieves a certain improvement over one-stage PatchDCT, the computational cost increases and the inference speed reduces.
  
@@ -21,6 +35,19 @@ In the process of visualization, we observe that mixed patches with extremely un
 **Q1:   There is only runtime result compared with Mask-RCNN and DCT-Mask. Please complement more experiments to compare the efficiency of PatchDCT with other refinement models.**
 
 **A1:**
+In the latest version of our paper, we update Table 4 with the speed of other SOTA methods measured on a single A100. We also add supplemental description in Section 4 (refer to the red part in Table 4 and Section 4). We list a brief version of Table 4 below  to demonstrate the efficiency of our model.
+|Method| Backbone |AP|FPS                        
+|----------------|-------------------------------|-----------------------------|-----------------------------|
+Mask RCNN|R101-FPN|38.8|13.8
+DCT-Mask|R101-FPN|40.1|13.0
+MaskTransfiner|R101-FPN|40.7|5.5
+SOLQ|R101-FPN|40.9|10.7
+HTC|RX101-FPN|41.2|4.7
+PointRend|RX101-FPN|41.4|11.4
+RefineMask|RX101-FPN|41.8|7.6
+PatchDCT|R101-FPN|40.7|11.8
+PatchDCT|R101-FPN|42.2|11.7
+All the models expect SOLQ are trained using '3x' schedules (~36 epochs) on COCO 2017val. SOLQ is trained using 50 epochs.
 
 **Q2: In this paper, the result in Table 1 suggests that when using 1x1 patch and 1-dim DCT vector the network has the best performance (57.6 AP). But when encoding 1x1 patch (single-pixel) using DCT, the result should be the value of the pixel itself. What is the difference between this method and directly refining the mask with 1x1 conv when the patch size is 1x1? I think this result is inconsistent with DCT-Mask, nor "binary grid refinement". According to DCT-Mask (Table 1), directly increasing the resolution decreases the mask AP, which is the main reason they use DCT encoding.**
 
