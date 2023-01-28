@@ -1,68 +1,165 @@
-<img src=".github/Detectron2-Logo-Horz.svg" width="300" >
+# PatchDCT: Patch Refinement for High Quality Instance Segmentation
 
-<a href="https://opensource.facebook.com/support-ukraine">
-  <img src="https://img.shields.io/badge/Support-Ukraine-FFD500?style=flat&labelColor=005BBB" alt="Support Ukraine - Help Provide Humanitarian Aid to Ukraine." />
-</a>
-
-Detectron2 is Facebook AI Research's next generation library
-that provides state-of-the-art detection and segmentation algorithms.
-It is the successor of
-[Detectron](https://github.com/facebookresearch/Detectron/)
-and [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark/).
-It supports a number of computer vision research projects and production applications in Facebook.
+Qinrou Wen, Jirui Yang, Xue Yang, Kewei Liang
 
 <div align="center">
-  <img src="https://user-images.githubusercontent.com/1381301/66535560-d3422200-eace-11e9-9123-5535d469db19.png"/>
-</div>
-<br>
+  <img src="https://alexander-kirillov.github.io/images/kirillov2019pointrend.jpg"/>
+</div><br/>
 
-## Learn More about Detectron2
+In this repository, we release code for PointRend in Detectron2. PointRend can be flexibly applied to both instance and semantic segmentation tasks by building on top of existing state-of-the-art models.
 
-Explain Like I’m 5: Detectron2            |  Using Machine Learning with Detectron2
-:-------------------------:|:-------------------------:
-[![Explain Like I’m 5: Detectron2](https://img.youtube.com/vi/1oq1Ye7dFqc/0.jpg)](https://www.youtube.com/watch?v=1oq1Ye7dFqc)  |  [![Using Machine Learning with Detectron2](https://img.youtube.com/vi/eUSgtfK4ivk/0.jpg)](https://www.youtube.com/watch?v=eUSgtfK4ivk)
+## Quick start and visualization
 
-## What's New
-* Includes new capabilities such as panoptic segmentation, Densepose, Cascade R-CNN, rotated bounding boxes, PointRend,
-  DeepLab, ViTDet, MViTv2 etc.
-* Used as a library to support building [research projects](projects/) on top of it.
-* Models can be exported to TorchScript format or Caffe2 format for deployment.
-* It [trains much faster](https://detectron2.readthedocs.io/notes/benchmarks.html).
+This [Colab Notebook](https://colab.research.google.com/drive/1isGPL5h5_cKoPPhVL9XhMokRtHDvmMVL) tutorial contains examples of PointRend usage and visualizations of its point sampling stages.
 
-See our [blog post](https://ai.facebook.com/blog/-detectron2-a-pytorch-based-modular-object-detection-library-/)
-to see more demos and learn about detectron2.
+## Training
 
-## Installation
+To train a model with 8 GPUs run:
+```bash
+cd /path/to/detectron2/projects/PointRend
+python train_net.py --config-file configs/InstanceSegmentation/pointrend_rcnn_R_50_FPN_1x_coco.yaml --num-gpus 8
+```
 
-See [installation instructions](https://detectron2.readthedocs.io/tutorials/install.html).
+## Evaluation
 
-## Getting Started
+Model evaluation can be done similarly:
+```bash
+cd /path/to/detectron2/projects/PointRend
+python train_net.py --config-file configs/InstanceSegmentation/pointrend_rcnn_R_50_FPN_1x_coco.yaml --eval-only MODEL.WEIGHTS /path/to/model_checkpoint
+```
 
-See [Getting Started with Detectron2](https://detectron2.readthedocs.io/tutorials/getting_started.html),
-and the [Colab Notebook](https://colab.research.google.com/drive/16jcaJoc6bCFAQ96jDe2HwtXj7BMD_-m5)
-to learn about basic usage.
+# Pretrained Models
 
-Learn more at our [documentation](https://detectron2.readthedocs.org).
-And see [projects/](projects/) for some projects that are built on top of detectron2.
+## Instance Segmentation
+#### COCO
 
-## Model Zoo and Baselines
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">Mask<br/>head</th>
+<th valign="bottom">Backbone</th>
+<th valign="bottom">lr<br/>sched</th>
+<th valign="bottom">Output<br/>resolution</th>
+<th valign="bottom">mask<br/>AP</th>
+<th valign="bottom">mask<br/>AP&ast;</th>
+<th valign="bottom">model id</th>
+<th valign="bottom">download</th>
+<!-- TABLE BODY -->
+ <tr><td align="left"><a href="configs/InstanceSegmentation/pointrend_rcnn_R_50_FPN_1x_coco.yaml">PointRend</a></td>
+<td align="center">R50-FPN</td>
+<td align="center">1&times;</td>
+<td align="center">224&times;224</td>
+<td align="center">36.2</td>
+<td align="center">39.7</td>
+<td align="center">164254221</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_R_50_FPN_1x_coco/164254221/model_final_736f5a.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_R_50_FPN_1x_coco/164254221/metrics.json">metrics</a></td>
+</tr>
+ <tr><td align="left"><a href="configs/InstanceSegmentation/pointrend_rcnn_R_50_FPN_3x_coco.yaml">PointRend</a></td>
+<td align="center">R50-FPN</td>
+<td align="center">3&times;</td>
+<td align="center">224&times;224</td>
+<td align="center">38.3</td>
+<td align="center">41.6</td>
+<td align="center">164955410</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_R_50_FPN_3x_coco/164955410/model_final_edd263.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_R_50_FPN_3x_coco/164955410/metrics.json">metrics</a></td>
+</tr>
+</tr>
+ <tr><td align="left"><a href="configs/InstanceSegmentation/pointrend_rcnn_R_101_FPN_3x_coco.yaml">PointRend</a></td>
+<td align="center">R101-FPN</td>
+<td align="center">3&times;</td>
+<td align="center">224&times;224</td>
+<td align="center">40.1</td>
+<td align="center">43.8</td>
+<td align="center"></td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_R_101_FPN_3x_coco/28119983/model_final_3f4d2a.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_R_101_FPN_3x_coco/28119983/metrics.json">metrics</a></td>
+</tr>
+</tr>
+ <tr><td align="left"><a href="configs/InstanceSegmentation/pointrend_rcnn_X_101_32x8d_FPN_3x_coco.yaml">PointRend</a></td>
+<td align="center">X101-FPN</td>
+<td align="center">3&times;</td>
+<td align="center">224&times;224</td>
+<td align="center">41.1</td>
+<td align="center">44.7</td>
+<td align="center"></td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_X_101_32x8d_FPN_3x_coco/28119989/model_final_ba17b9.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_X_101_32x8d_FPN_3x_coco/28119989/metrics.json">metrics</a></td>
+</tr>
+</tbody></table>
 
-We provide a large set of baseline results and trained models available for download in the [Detectron2 Model Zoo](MODEL_ZOO.md).
+AP&ast; is COCO mask AP evaluated against the higher-quality LVIS annotations; see the paper for details.
+Run `python detectron2/datasets/prepare_cocofied_lvis.py` to prepare GT files for AP&ast; evaluation.
+Since LVIS annotations are not exhaustive, `lvis-api` and not `cocoapi` should be used to evaluate AP&ast;.
 
-## License
+#### Cityscapes
+Cityscapes model is trained with ImageNet pretraining.
 
-Detectron2 is released under the [Apache 2.0 license](LICENSE).
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">Mask<br/>head</th>
+<th valign="bottom">Backbone</th>
+<th valign="bottom">lr<br/>sched</th>
+<th valign="bottom">Output<br/>resolution</th>
+<th valign="bottom">mask<br/>AP</th>
+<th valign="bottom">model id</th>
+<th valign="bottom">download</th>
+<!-- TABLE BODY -->
+ <tr><td align="left"><a href="configs/InstanceSegmentation/pointrend_rcnn_R_50_FPN_1x_cityscapes.yaml">PointRend</a></td>
+<td align="center">R50-FPN</td>
+<td align="center">1&times;</td>
+<td align="center">224&times;224</td>
+<td align="center">35.9</td>
+<td align="center">164255101</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_R_50_FPN_1x_cityscapes/164255101/model_final_115bfb.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/InstanceSegmentation/pointrend_rcnn_R_50_FPN_1x_cityscapes/164255101/metrics.json">metrics</a></td>
+</tr>
+</tbody></table>
 
-## Citing Detectron2
 
-If you use Detectron2 in your research or wish to refer to the baseline results published in the [Model Zoo](MODEL_ZOO.md), please use the following BibTeX entry.
+## Semantic Segmentation
+
+#### Cityscapes
+Cityscapes model is trained with ImageNet pretraining.
+
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">Method</th>
+<th valign="bottom">Backbone</th>
+<th valign="bottom">Output<br/>resolution</th>
+<th valign="bottom">mIoU</th>
+<th valign="bottom">model id</th>
+<th valign="bottom">download</th>
+<!-- TABLE BODY -->
+ <tr><td align="left"><a href="configs/SemanticSegmentation/pointrend_semantic_R_101_FPN_1x_cityscapes.yaml">SemanticFPN + PointRend</a></td>
+<td align="center">R101-FPN</td>
+<td align="center">1024&times;2048</td>
+<td align="center">78.9</td>
+<td align="center">202576688</td>
+<td align="center"><a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/SemanticSegmentation/pointrend_semantic_R_101_FPN_1x_cityscapes/202576688/model_final_cf6ac1.pkl">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detectron2/PointRend/SemanticSegmentation/pointrend_semantic_R_101_FPN_1x_cityscapes/202576688/metrics.json">metrics</a></td>
+</tr>
+</tbody></table>
+
+## <a name="CitingPointRend"></a>Citing PointRend
+
+If you use PointRend, please use the following BibTeX entry.
 
 ```BibTeX
-@misc{wu2019detectron2,
-  author =       {Yuxin Wu and Alexander Kirillov and Francisco Massa and
-                  Wan-Yen Lo and Ross Girshick},
-  title =        {Detectron2},
-  howpublished = {\url{https://github.com/facebookresearch/detectron2}},
-  year =         {2019}
+@InProceedings{kirillov2019pointrend,
+  title={{PointRend}: Image Segmentation as Rendering},
+  author={Alexander Kirillov and Yuxin Wu and Kaiming He and Ross Girshick},
+  journal={ArXiv:1912.08193},
+  year={2019}
+}
+```
+
+## <a name="CitingImplicitPointRend"></a>Citing Implicit PointRend
+
+If you use Implicit PointRend, please use the following BibTeX entry.
+
+```BibTeX
+@InProceedings{cheng2021pointly,
+  title={Pointly-Supervised Instance Segmentation,
+  author={Bowen Cheng and Omkar Parkhi and Alexander Kirillov},
+  journal={ArXiv},
+  year={2021}
 }
 ```
