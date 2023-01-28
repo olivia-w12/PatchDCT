@@ -23,7 +23,7 @@ The codes of this project is on projects/PatchDCT/
     ./train.sh
 
 ### Testing
-    cd ./projects/Patch/
+    cd ./projects/PatchDCT/
     ./test.sh
 ## Model ZOO 
 ### Trained models on COCO
