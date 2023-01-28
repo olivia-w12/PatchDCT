@@ -29,15 +29,15 @@ The codes of this project is on projects/PatchDCT/
 ### Trained models on COCO
 Model |  Backbone | Schedule | Multi-scale training | FPS | AP (val) | Link
 --- |:---:|:---:|:---:|:---:|:---:|:---:
-PatchDCT | R50 | 1x | Yes |   12.3 | 37.2  | [download(Fetch code: xdma)](链接：https://pan.baidu.com/s/1J-L6j_Gr6uplI1RN_gAfAg)
-PatchDCT | R101 | 3x | Yes |  11.8 | 39.9  | [download(Fetch code: jkdf)](https://pan.baidu.com/s/1lVEintYgDotdDi-N-PZehA)
-PatchDCT | RX101 | 3x | Yes |   11.7 | 41.2  | [download(Fetch code: dfae)](https://pan.baidu.com/s/1LnBrwsFlj6YuGar_Jnd2_g)
-PatchDCT | SwinB  | 3x | Yes |   7.3 | 46.1  | [download(Fetch code: dafe)](https://pan.baidu.com/s/132_w16Riu6HzL22x9GMk7g)
+PatchDCT | R50 | 1x | Yes |   12.3 | 37.2  | [download(Fetch code: xdma)]()
+PatchDCT | R101 | 3x | Yes |  11.8 | 39.9  | [download(Fetch code: jkdf)]
+PatchDCT | RX101 | 3x | Yes |   11.7 | 41.2  | [download(Fetch code: dfae)]
+PatchDCT | SwinB  | 3x | Yes |   7.3 | 46.1  | [download(Fetch code: dafe)]
 
 ### Trained models on Cityscapes
 Model |Data|  Backbone | Schedule | Multi-scale training | AP (val) | Link
 --- |:---:|:---:|:---:|:---:|:---:|:---:
-PatchDCT | Fine-Only | R50 | 1x | Yes | 37.0  | [download(Fetch code: faef)](https://pan.baidu.com/s/1put17hlP7y20y5BeMa82gw)
+PatchDCT | Fine-Only | R50 | 1x | Yes | 37.0  | [download(Fetch code: faef)]
 PatchDCT | CoCo-Pretrain +Fine | R50 | 1x | Yes |   |
 
 #### Notes
