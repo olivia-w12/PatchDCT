@@ -29,16 +29,26 @@ The codes of this project is on projects/PatchDCT/
 ### Trained models on COCO
 Model |  Backbone | Schedule | Multi-scale training | FPS | AP (val) | Link
 --- |:---:|:---:|:---:|:---:|:---:|:---:
+<<<<<<< HEAD
 PatchDCT | R50 | 1x | Yes |   12.3 | 37.2  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXEiAhFmrkNw5VeW)
 PatchDCT | R101 | 3x | Yes |  11.8 | 39.9  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXPAiUOHZjerbcyO)
 PatchDCT | RX101 | 3x | Yes |   11.7 | 41.2  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXUb5y-14wtZfNRF)
 PatchDCT | SwinB  | 3x | Yes |   7.3 | 46.1  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXemi3HRqrjvWshA)
+=======
+PatchDCT | R50 | 1x | Yes |   12.3 | 37.2  | [download(Fetch code: xdma)]()
+PatchDCT | R101 | 3x | Yes |  11.8 | 39.9  | [download(Fetch code: jkdf)]
+PatchDCT | RX101 | 3x | Yes |   11.7 | 41.2  | [download(Fetch code: dfae)]
+PatchDCT | SwinB  | 3x | Yes |   7.3 | 46.1  | [download(Fetch code: dafe)]
+
 
 ### Trained models on Cityscapes
 Model |Data|  Backbone | Schedule | Multi-scale training | AP (val) | Link
 --- |:---:|:---:|:---:|:---:|:---:|:---:
+<<<<<<< HEAD
 PatchDCT | Fine-Only | R50 | 1x | Yes | 37.0  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahW6I0Aqrxu9TnGIH)
-PatchDCT | CoCo-Pretrain +Fine | R50 | 1x | Yes |   |
+=======
+PatchDCT | Fine-Only | R50 | 1x | Yes | 37.0  | [download(Fetch code: faef)]
+
 
 #### Notes
 - We observe about 0.2 AP noise in COCO and about 0.4 variance in FPS.
