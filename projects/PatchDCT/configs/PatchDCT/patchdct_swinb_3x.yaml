@@ -28,4 +28,4 @@ INPUT:
 DATASETS:
   TRAIN: ("coco_2017_train",)
   TEST: ("coco_2017_val",)
-OUTPUT_DIR: "./output_swin_B_3x"
+OUTPUT_DIR: "./output/patchdct_swinb_3x"
