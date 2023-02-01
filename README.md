@@ -25,6 +25,7 @@ The codes of this project is on projects/PatchDCT/
 ### Testing
     cd ./projects/PatchDCT/
     ./test.sh
+For Swin-B backbone, use train_net_swinb.py instead of train_net.py
 ## Model ZOO 
 ### Trained models on COCO
 Model |  Backbone | Schedule | Multi-scale training | FPS | AP (val) | Link
