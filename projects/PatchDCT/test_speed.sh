@@ -1,4 +1,4 @@
-CONFIG=patchdct_r101_3x
+CONFIG=patchdct_r50_1x
 CUDA_VISIBLE_DEVICES=2 \
 python train_net.py --config-file configs/PatchDCT/${CONFIG}.yaml \
                     --eval-only \
