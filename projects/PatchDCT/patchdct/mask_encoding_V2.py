@@ -1,19 +1,25 @@
 import torch
 import torch.nn as nn
 import numpy as np
+
+
 class DctMaskEncodingV2(nn.Module):
-    def __init__(self,vec_dim,mask_size):
-        super(DctMaskEncodingV2,self).__init__()
+    """
+    slightly faster than DctMaskEncoding at inference(don't use for training)
+    """
+
+    def __init__(self, vec_dim, mask_size):
+        super(DctMaskEncodingV2, self).__init__()
         self.vec_dim = vec_dim
         self.mask_size = mask_size
-        assert vec_dim<=mask_size**2
+        assert vec_dim <= mask_size ** 2
         self.dct_vector_coords = self._get_dct_vector_coords(r=mask_size)
-        self.register_buffer('T',self._get_dct_matrix())
+        self.register_buffer('T', self._get_dct_matrix())
 
-    def _get_dct_vector_coords(self,r=112):
+    def _get_dct_vector_coords(self, r=112):
         """
                 Get the coordinates with zigzag order.
-                """
+        """
         dct_index = []
         for i in range(r):
             if i % 2 == 0:  # start with even number
@@ -34,17 +40,13 @@ class DctMaskEncodingV2(nn.Module):
 
     def _get_dct_matrix(self):
         N = self.mask_size
-        dct_matrix = torch.zeros((N,N),dtype = torch.float32)
-        for i in range(N):
-            for j in range(N):
-                if i==0:
-                    dct_matrix[i,j] = 1/np.sqrt(N)
-                else:
-                    item = (2*j+1)*i*np.pi/(2*N)
-                    dct_matrix[i,j] = np.sqrt(2/N)*np.cos(item)
-        return dct_matrix
+        i_row = torch.arange(0, N)
+        j_col = (2 * i_row + 1)
+        dct_matrix = np.cos(np.outer(i_row, j_col) * np.pi / (2 * N)) * np.sqrt(2 / N)
+        dct_matrix[0, :] = 1 / np.sqrt(N)
+        return torch.from_numpy(dct_matrix).to(dtype=torch.float32)
 
-    def dct_2d(self,img):
+    def dct_2d(self, img):
         """
 
         Args:
@@ -55,7 +57,7 @@ class DctMaskEncodingV2(nn.Module):
         """
         return self.T @ img @ self.T.T
 
-    def idct_2d(self,dct_img):
+    def idct_2d(self, dct_img):
         """
 
         Args:

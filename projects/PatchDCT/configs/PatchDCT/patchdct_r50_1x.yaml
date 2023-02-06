@@ -42,15 +42,16 @@ MODEL:
     PATCH_DCT_VECTOR_DIM: 6
     MASK_LOSS_PARA: 1.0
     HIDDEN_FEATURES: 1024
-    PATCH_THRESHOLD: 0.3
-    NUM_STAGE: 2 #include DCT stage, should be PatchDCT N_Stage+1
+    PATCH_THRESHOLD: 0.30
+    NUM_STAGE: 2 # include DCT stage, should be PatchDCT N_Stage+1
     MASK_LOSS_PARA_EACH_STAGE: [1.0, 1.0]
+    EVAL_GT: False # Only set to be "True" for upper bound evaluation
     DCT_LOSS_TYPE: "l1"
   WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: True
 DATASETS:
   TRAIN: ("coco_2017_train",)
-  TEST: ("coco_2017_val","lvis_v0.5_val_cocofied")
+  TEST: ("coco_2017_val",) # "lvis_v0.5_val_cocofied")
 SOLVER:
   IMS_PER_BATCH: 16
   BASE_LR: 0.02

@@ -1,4 +1,4 @@
-CONFIG=patchdct_r50_city_1x_fine
+CONFIG=patchdct_r50_1x
 CUDA_VISIBLE_DEVICES=1,2,3,4 \
 python train_net.py --config-file configs/PatchDCT/${CONFIG}.yaml \
                     --num-gpus 4 \

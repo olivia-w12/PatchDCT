@@ -51,6 +51,7 @@ class PatchDCTROIHeads(ROIHeads):
         keypoint_pooler: Optional[ROIPooler] = None,
         keypoint_head: Optional[nn.Module] = None,
         train_on_pred_boxes: bool = False,
+        eval_gt: bool = False,
         **kwargs
     ):
         """
@@ -66,11 +67,12 @@ class PatchDCTROIHeads(ROIHeads):
                 None if not using mask head.
             fine_features (list[str]): list of finer feature to use for the PatchDCT
             mask_pooler (ROIPooler): pooler to extra region features for mask head
-            fine_features (list[str]): pooler to extra region features for PatchDCT
+            fine_mask_pooler (list[str]): pooler to extra region features for PatchDCT
             mask_head (nn.Module): transform features to make mask predictions
             keypoint_in_features, keypoint_pooler, keypoint_head: similar to ``mask*``.
             train_on_pred_boxes (bool): whether to use proposal boxes or
                 predicted boxes from the box head to train other heads.
+            eval_gt: use for calculate the upper bound of the model
         """
         super().__init__(**kwargs)
         # keep self.in_features for backward compatibility
@@ -86,6 +88,7 @@ class PatchDCTROIHeads(ROIHeads):
             self.fine_mask_pooler = fine_mask_pooler
             self.mask_head = mask_head
             self.fine_features = fine_features
+            self.eval_gt = eval_gt
         self.keypoint_on = keypoint_in_features is not None
         if self.keypoint_on:
             self.keypoint_in_features = keypoint_in_features
@@ -174,6 +177,7 @@ class PatchDCTROIHeads(ROIHeads):
         ret["mask_head"] = build_mask_head(
             cfg, ShapeSpec(channels=in_channels, width=pooler_resolution, height=pooler_resolution)
         )
+        ret["eval_gt"] = cfg.MODEL.ROI_MASK_HEAD.EVAL_GT
         return ret
 
     @classmethod
@@ -254,8 +258,9 @@ class PatchDCTROIHeads(ROIHeads):
         else:
             pred_instances = self._forward_box(features, proposals)
 
-            #for model analyze,use PatchDCTROiHeads with GT
-            # pred_instances = self.match_gt_to_pred_boxes(targets, pred_instances)
+            # for model analyze, use PatchDCTROiHeads with GT
+            if self.eval_gt:
+                pred_instances = self.match_gt_to_pred_boxes(targets, pred_instances)
 
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.

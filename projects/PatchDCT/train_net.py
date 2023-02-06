@@ -38,7 +38,10 @@ from detectron2.evaluation import (
     verify_results,
 )
 from detectron2.modeling import GeneralizedRCNNWithTTA
-from patchdct import add_dctmask_config
+
+
+from detectron2.data import build_detection_test_loader
+from patchdct import add_patchdct_config, DatasetMapper_with_GT
 
 
 class Trainer(DefaultTrainer):
@@ -48,6 +51,18 @@ class Trainer(DefaultTrainer):
     are working on a new research project. In that case you can write your
     own training loop. You can use "tools/plain_train_net.py" as an example.
     """
+
+    @classmethod
+    def build_test_loader(cls, cfg, dataset_name):
+        """
+        Returns:
+            iterable
+
+        It now calls :func:`detectron2.data.build_detection_test_loader`.
+        Overwrite it if you'd like a different data loader.
+        """
+        return build_detection_test_loader(cfg, dataset_name, mapper=DatasetMapper_with_GT(cfg, False))
+
 
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
@@ -122,7 +137,7 @@ def setup(args):
     Create configs and perform basic setups.
     """
     cfg = get_cfg()
-    add_dctmask_config(cfg)#add for dct mask
+    add_patchdct_config(cfg) # add for patchdct
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()

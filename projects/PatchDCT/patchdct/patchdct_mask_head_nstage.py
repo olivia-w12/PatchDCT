@@ -10,6 +10,7 @@ from detectron2.layers import Conv2d, ShapeSpec, cat, get_norm
 from detectron2.modeling import ROI_MASK_HEAD_REGISTRY
 from detectron2.modeling.roi_heads.mask_head import BaseMaskRCNNHead
 from detectron2.structures import Instances
+# from .mask_encoding_V2 import DctMaskEncodingV2
 from .mask_encoding import DctMaskEncoding
 
 
@@ -24,7 +25,7 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
     def __init__(self, input_shape: ShapeSpec, *, num_classes, conv_dims, conv_norm="",
                  dct_vector_dim, mask_size, pooler_resolution, hidden_features, fine_features_resolution,
                  mask_size_assemble, patch_size, patch_dct_vector_dim, mask_loss_para, dct_loss_type,
-                 num_stage, mask_loss_para_each_stage, patch_threshold,
+                 num_stage, mask_loss_para_each_stage, patch_threshold, eval_gt,
                  **kwargs):
         """
         NOTE: this interface is experimental.
@@ -47,7 +48,8 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
             dct_loss_type: loss type of DCT vector regressor(default=l1, option=[l1, sl1,l2])
             num_stage: number of segmentation stage, equals to number of PatchDCT blocks+1(default=2)
             mask_loss_para_each_stage: coefficient of loss for each segmentation stage
-            patch_threshold: threshold used for classifier(default=0.3)
+            patch_threshold: threshold used for classifier(default=0.3),
+            eval_gt: use for calculate the upper bound of the model
 
         """
         super().__init__(**kwargs)
@@ -67,7 +69,7 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
         self.num_stage = num_stage - 1  # num_stage below is the number of PatchDCT block
         self.loss_para = mask_loss_para_each_stage
         self.patch_threshold = patch_threshold
-
+        self.eval_gt = eval_gt
         self.dct_encoding = DctMaskEncoding(vec_dim=self.dct_vector_dim, mask_size=self.mask_size)
         self.patch_dct_encoding = DctMaskEncoding(vec_dim=self.patch_dct_vector_dim, mask_size=self.patch_size)
 
@@ -180,7 +182,8 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
             patch_dct_vector_dim=cfg.MODEL.ROI_MASK_HEAD.PATCH_DCT_VECTOR_DIM,
             num_stage=cfg.MODEL.ROI_MASK_HEAD.NUM_STAGE,
             mask_loss_para_each_stage=cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_PARA_EACH_STAGE,
-            patch_threshold=cfg.MODEL.ROI_MASK_HEAD.PATCH_THRESHOLD
+            patch_threshold=cfg.MODEL.ROI_MASK_HEAD.PATCH_THRESHOLD,
+            eval_gt=cfg.MODEL.ROI_MASK_HEAD.EVAL_GT,
         )
 
         if cfg.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK:
@@ -217,6 +220,7 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
                 return x, {}, {}
 
         # reverse transform to obtain high-resolution masks
+        # if use DctMaskEncodingV2, plese use: masks = self.dct_encoding.decode(x)
         masks = self.dct_encoding.decode(x).real
         masks = masks[:, None, :, :]
 
@@ -287,6 +291,7 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
         fg = torch.zeros_like(patch_vector, device=bfg.device)
         fg[index == 2, 0] = self.patch_size
         patch_vector = patch_vector * bg + fg
+        # if use DctMaskEncodingV2, plese use: patch_masks = self.patch_dct_encoding.decode(patch_vector)
         patch_masks = self.patch_dct_encoding.decode(patch_vector).real
         masks = rearrange(patch_masks, "(b s1 s2) p1 p2 -> b (s1 p1) (s2 p2)", s1=self.scale, s2=self.scale)
         return masks[:, None, :, :]
@@ -404,6 +409,13 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
                 bfg[bfg[:, 2] > self.patch_threshold, 2] = bfg[bfg[:, 2] > self.patch_threshold, 2] + 1
                 index = torch.argmax(bfg, dim=1)
 
+                # --------------only for upper bound evaluation------------
+                if self.eval_gt:
+                    gt_masks, gt_bfg = self.get_gt_mask_inference(pred_instances, pred_mask_logits)
+                    index = gt_bfg
+                    patch_vector[gt_bfg == 1] = gt_masks
+                # ---------------------------------------------------------
+
                 patch_vector[index == 0, ::] = 0
                 patch_vector[index == 2, ::] = 0
                 patch_vector[index == 2, 0] = self.patch_size
@@ -456,11 +468,45 @@ class MaskRCNNPatchDCTHead_NSTAGE(BaseMaskRCNNHead):
         gt_masks_coarse = cat(gt_masks_coarse, dim=0)
         gt_masks_coarse = self.dct_encoding.encode(gt_masks_coarse).to(dtype=torch.float32)
 
+        gt_masks, gt_bfg = self.get_gt_bfg(gt_masks)
+        return gt_masks, gt_masks_coarse, gt_bfg
+
+    def get_gt_mask_inference(self,instances,pred_mask_logits):
+        gt_masks = []
+
+        for instances_per_image in instances:
+            if len(instances_per_image) == 0:
+                continue
+            if instances_per_image.has("gt_masks"):
+                gt_masks_per_image = instances_per_image.gt_masks.crop_and_resize(
+                    instances_per_image.pred_boxes.tensor, self.mask_size_assemble)
+            else:
+                # print("gt_mask is empty")
+                shape = instances_per_image.pred_boxes.tensor.shape[0]
+                device = instances_per_image.pred_boxes.tensor.device
+                gt_masks_per_image = torch.zeros((shape, self.mask_size_assemble, self.mask_size_assemble),
+                                                 dtype=torch.bool).to(device)
+
+            gt_masks_per_image = rearrange(gt_masks_per_image,
+                                           "b (s1 p1) (s2 p2) -> (b s1 s2) p1 p2", s1=self.scale, s2=self.scale)
+
+            gt_masks.append(gt_masks_per_image)
+
+        if len(gt_masks) == 0:
+            return pred_mask_logits.sum() * 0
+
+        gt_masks = cat(gt_masks, dim=0)
+        gt_masks = self.patch_dct_encoding.encode(gt_masks)
+        gt_masks = gt_masks.to(dtype=torch.float32)
+
+        gt_masks, gt_bfg = self.get_gt_bfg(gt_masks)
+        return gt_masks, gt_bfg
+
+    def get_gt_bfg(self, gt_masks):
         gt_bfg = gt_masks[:, 0].clone()
         gt_bfg[(gt_bfg > 0) & (gt_bfg < self.patch_size)] = 1.
         gt_bfg[gt_bfg == self.patch_size] = 2
         gt_bfg = gt_bfg.to(dtype=torch.int64)
         gt_masks = gt_masks[gt_bfg == 1, :]
-        return gt_masks, gt_masks_coarse, gt_bfg
-
+        return gt_masks, gt_bfg
 

@@ -42,9 +42,10 @@ MODEL:
     PATCH_DCT_VECTOR_DIM: 6
     MASK_LOSS_PARA: 1.0
     HIDDEN_FEATURES: 1024
-    PATCH_THRESHOLD: 0.3
-    NUM_STAGE: 3 #include DCT stage, should be PatchDCT N_Stage+1
+    PATCH_THRESHOLD: 0.30
+    NUM_STAGE: 3 # include DCT stage, should be PatchDCT N_Stage+1
     MASK_LOSS_PARA_EACH_STAGE: [0.5, 0.5, 0.8]
+    EVAL_GT: False # Only set to be "True" for upper bound evaluation
     DCT_LOSS_TYPE: "l1"
   WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   MASK_ON: True

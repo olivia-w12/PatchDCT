@@ -1,3 +1,7 @@
+"""
+modified from:
+    https://github.com/zh217/torch-dct
+"""
 import numpy as np
 import torch
 

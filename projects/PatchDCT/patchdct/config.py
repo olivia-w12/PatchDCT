@@ -1,12 +1,12 @@
 
-def add_dctmask_config(cfg):
+def add_patchdct_config(cfg):
     """
-    Add config for DCT-Mask.
+    Add config for PatchDCT
     """
 
     # For MaskRCNNDCTHead
     cfg.MODEL.ROI_MASK_HEAD.IN_FEATURES = ["p2", "p3", "p4", "p5"]
-    cfg.MODEL.ROI_MASK_HEAD.PATCH_THRESHOLD = 0.3
+    cfg.MODEL.ROI_MASK_HEAD.PATCH_THRESHOLD = 0.30
     cfg.MODEL.ROI_MASK_HEAD.HIDDEN_FEATURES = 1024
     cfg.MODEL.ROI_MASK_HEAD.DCT_VECTOR_DIM = 300
     cfg.MODEL.ROI_MASK_HEAD.MASK_SIZE = 128
@@ -19,3 +19,4 @@ def add_dctmask_config(cfg):
     cfg.MODEL.ROI_MASK_HEAD.PATCH_DCT_VECTOR_DIM = 6
     cfg.MODEL.ROI_MASK_HEAD.NUM_STAGE = 2
     cfg.MODEL.ROI_MASK_HEAD.MASK_LOSS_PARA_EACH_STAGE = [1.0, 1.0]
+    cfg.MODEL.ROI_MASK_HEAD.EVAL_GT = False

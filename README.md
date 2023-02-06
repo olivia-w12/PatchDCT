@@ -11,7 +11,7 @@ fine boundaries and low computational cost.
 
 ## Installation
 #### Requirements
-- PyTorch ≥ 1.5 
+- PyTorch ≥ 1.8 
 - einops ≥ 0.6.0
 
 This implementation is based on [detectron2](https://github.com/facebookresearch/detectron2). Please refer to [INSTALL.md](INSTALL.md). for installation and dataset preparation.
@@ -25,6 +25,13 @@ The codes of this project is on projects/PatchDCT/
 ### Testing
     cd ./projects/PatchDCT/
     ./test.sh
+### Speed Testing
+    cd ./projects/PatchDCT/
+    ./test_speed.sh
+### Upper Bound of Model Performance(Table 1 in the paper)
+    cd ./projects/PatchDCT/
+    ./test_up.sh
+    
 For Swin-B backbone, use train_net_swinb.py instead of train_net.py
 ## Model ZOO 
 ### Trained models on COCO
@@ -45,7 +52,7 @@ PatchDCT | COCO Pretrain+Fine | R50 | 1x | Yes | 40.2  | [download](https://1drv
 
 
 #### Notes
-- We observe about 0.2 AP noise in COCO and about 0.4 variance in FPS.
+- We observe about 0.2 AP noise in COCO.
 - The inference time is measured on NVIDIA A100 with batchsize=1.
 - [Lvis 0.5](https://) is used for evaluation.
 

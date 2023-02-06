@@ -42,7 +42,8 @@ from detectron2.modeling import GeneralizedRCNNWithTTA
 from detectron2.solver.build import maybe_add_gradient_clipping, get_default_optimizer_params
 
 from swinb import add_swinb_config
-from patchdct.config import add_dctmask_config
+from detectron2.data import build_detection_test_loader
+from patchdct import add_patchdct_config, DatasetMapper_with_GT
 
 def build_evaluator(cfg, dataset_name, output_folder=None):
     """
@@ -120,6 +121,17 @@ class Trainer(DefaultTrainer):
         return res
 
     @classmethod
+    def build_test_loader(cls, cfg, dataset_name):
+        """
+        Returns:
+            iterable
+
+        It now calls :func:`detectron2.data.build_detection_test_loader`.
+        Overwrite it if you'd like a different data loader.
+        """
+        return build_detection_test_loader(cfg, dataset_name, mapper=DatasetMapper_with_GT(cfg, False))
+
+    @classmethod
     def build_optimizer(cls, cfg, model):
         params = get_default_optimizer_params(
             model,
@@ -173,7 +185,7 @@ def setup(args):
     Create configs and perform basic setups.
     """
     cfg = get_cfg()
-    add_dctmask_config(cfg)
+    add_patchdct_config(cfg)
     add_swinb_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
