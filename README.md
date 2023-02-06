@@ -48,7 +48,7 @@ PatchDCT | SwinB  | 3x | Yes |   7.3 | 46.1  | [download](https://1drv.ms/u/s!An
 Model |Data|  Backbone | Schedule | Multi-scale training | AP (val) | Link
 --- |:---:|:---:|:---:|:---:|:---:|:---:
 PatchDCT | Fine-Only | R50 | 1x | Yes | 38.2 | [download](https://1drv.ms/u/s!AnjAyCPH6yfahW7NhlkFeGI-GtqP)
-PatchDCT | COCO Pretrain+Fine | R50 | 1x | Yes | 40.2  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXvFBzn4B4brE-vB)
+PatchDCT | COCO Pretrain+Fine | R50 | 1x | Yes | 40.3  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXvFBzn4B4brE-vB)
 
 
 #### Notes
