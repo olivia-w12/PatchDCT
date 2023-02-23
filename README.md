@@ -1,12 +1,15 @@
 # PatchDCT: Patch Refinement for High Quality Instance Segmentation(ICLR 2023)
 > [**PatchDCT: Patch Refinement for High Quality Instance Segmentation**]
 > Qinrou Wen, Jirui Yang, Xue Yang, Kewei Liang
-> [(paper)](https://arxiv.org/abs/2302.02693)
+> 
+> *arXiv preprint([arXiv:2302.02693](https://arxiv.org/abs/2302.02693))*
 
-In this repository, we release code for PatchDCT in Detectron2. PatchDCT is the fist compressed vector based multi-stage refinement framework.
-By using a classifier to refine foreground and background patches, and predicting an informative low-dimensional DCT vector for each mixed patch, PatchDCT generates high-resolution masks with
+In this repository, we release code for PatchDCT in Detectron2. 
+
+## Contributions
+- PatchDCT is the fist compressed vector based multi-stage refinement framework.
+- By using a classifier to refine foreground and background patches, and predicting an informative low-dimensional DCT vector for each mixed patch, PatchDCT generates high-resolution masks with
 fine boundaries and low computational cost.
-
 
 
 ## Installation
