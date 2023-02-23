@@ -31,7 +31,7 @@ MODEL:
     NUM_FC: 2
     POOLER_RESOLUTION: 7
   ROI_MASK_HEAD:
-    NAME: "MaskRCNNPatchDCTHead_NSTAGE"
+    NAME: "MaskRCNNPatchDCTHead"
     NUM_CONV: 4
     CLS_AGNOSTIC_MASK: False
     IN_FEATURES: ["p2", "p3", "p4", "p5"]
