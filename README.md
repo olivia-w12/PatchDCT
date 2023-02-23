@@ -11,8 +11,7 @@ fine boundaries and low computational cost.
 
 ## Installation
 #### Requirements
-- PyTorch ≥ 1.8 
-- einops ≥ 0.6.0
+- PyTorch ≥ 1.8
 
 This implementation is based on [detectron2](https://github.com/facebookresearch/detectron2). Please refer to [INSTALL.md](INSTALL.md). for installation and dataset preparation.
 
@@ -37,7 +36,7 @@ For Swin-B backbone, use train_net_swinb.py instead of train_net.py
 ### Trained models on COCO
 Model |  Backbone | Schedule | Multi-scale training | FPS | AP (val) | Link
 --- |:---:|:---:|:---:|:---:|:---:|:---:
-PatchDCT | R50 | 1x | Yes |   12.3 | 37.2  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXFbc09_PLuarT3V)
+PatchDCT | R50 | 1x | Yes |   12.3 | 37.2  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahX01VBk0dmCXk7sm)
 PatchDCT | R101 | 3x | Yes |  11.8 | 40.5 | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXP4vPsUhEkSyTJ4)
 PatchDCT | RX101 | 3x | Yes |   11.7 | 41.8  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXUDaBrVCGFheE8G)
 PatchDCT | SwinB  | 3x | Yes |   7.3 | 46.1  | [download](https://1drv.ms/u/s!AnjAyCPH6yfahXfrnZBNRNkvDgBp)
