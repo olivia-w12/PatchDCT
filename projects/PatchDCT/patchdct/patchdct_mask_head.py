@@ -1,5 +1,3 @@
-
-
 import fvcore.nn.weight_init as weight_init
 from typing import List
 import torch
@@ -9,12 +7,13 @@ from torch.nn import functional as F
 from detectron2.modeling import ROI_MASK_HEAD_REGISTRY
 from detectron2.config import configurable
 from detectron2.modeling.roi_heads.mask_head import BaseMaskRCNNHead
-from detectron2.layers import Conv2d, ShapeSpec, cat, get_norm,ConvTranspose2d
+from detectron2.layers import Conv2d, ShapeSpec, cat, get_norm, ConvTranspose2d
 from detectron2.structures import Instances
 
 from .mask_encoding import DctMaskEncoding
 from .utils import patch2masks, masks2patch
 from .get_gt_info import GT_infomation
+
 
 @ROI_MASK_HEAD_REGISTRY.register()
 class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
@@ -70,15 +69,14 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         self.ratio = fine_features_resolution // self.scale
         self.patch_threshold = patch_threshold
         self.eval_gt = eval_gt
-        self.num_stage = num_stage-1
+        self.num_stage = num_stage - 1
         self.loss_para = mask_loss_para_each_stage
         print("num stage of the model is {}".format(self.num_stage))
 
-        
         self.dct_encoding = DctMaskEncoding(vec_dim=self.dct_vector_dim, mask_size=self.mask_size)
         self.patch_dct_encoding = DctMaskEncoding(vec_dim=self.patch_dct_vector_dim, mask_size=self.patch_size)
         self.gt = GT_infomation(self.mask_size_assemble, self.mask_size, self.patch_size, self.scale,
-                                self.dct_encoding,self.patch_dct_encoding)
+                                self.dct_encoding, self.patch_dct_encoding)
 
         self.conv_norm_relus = []
 
@@ -98,14 +96,12 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
             self.conv_norm_relus.append(conv)
             cur_channels = conv_dim
 
-
-
         self.predictor = nn.Sequential(
-            nn.Linear(14**2*conv_dim,self.hidden_features),
+            nn.Linear(14 ** 2 * conv_dim, self.hidden_features),
             nn.ReLU(),
-            nn.Linear(self.hidden_features,self.hidden_features),
+            nn.Linear(self.hidden_features, self.hidden_features),
             nn.ReLU(),
-            nn.Linear(self.hidden_features,self.dct_vector_dim)
+            nn.Linear(self.hidden_features, self.dct_vector_dim)
         )
         self.reshape = Conv2d(
             1,
@@ -116,7 +112,7 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
             activation=F.relu
         )
         self.fusion = nn.Sequential(
-            Conv2d(cur_channels ,
+            Conv2d(cur_channels,
                    conv_dim,
                    kernel_size=3,
                    stride=1,
@@ -134,8 +130,7 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
                    activation=F.relu)
         )
 
-
-        self.downsample= nn.Sequential(
+        self.downsample = nn.Sequential(
             Conv2d(
                 cur_channels,
                 self.hidden_features,
@@ -156,13 +151,13 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         )
 
         self.predictor1 = Conv2d(self.hidden_features,
-                                               self.patch_dct_vector_dim*self.num_classes,
-                                               kernel_size=1,
-                                               stride=1,
-                                               padding=0,
-                                               )
+                                 self.patch_dct_vector_dim * self.num_classes,
+                                 kernel_size=1,
+                                 stride=1,
+                                 padding=0,
+                                 )
         self.predictor_bfg = Conv2d(self.hidden_features,
-                                    3*self.num_classes,
+                                    3 * self.num_classes,
                                     kernel_size=1,
                                     stride=1,
                                     padding=0,
@@ -170,7 +165,6 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
 
         for layer in self.conv_norm_relus:
             weight_init.c2_msra_fill(layer)
-
 
     @classmethod
     def from_config(cls, cfg, input_shape):
@@ -203,7 +197,7 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
             ret["num_classes"] = cfg.MODEL.ROI_HEADS.NUM_CLASSES
         return ret
 
-    def layers(self, x,fine_mask_features,instances):
+    def layers(self, x, fine_mask_features, instances):
         """
 
         Args:
@@ -212,11 +206,11 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
 
         Returns:
             x (Tensor): [B, D]. D is dct-dim. [B, D]. DCT_Vector in DCT-Mask.
-            bfg: A tensor of shape [B,num_class,3,scale,scale].
+            bfg: A tensor of shape [B,num_class,3,scale,scale] or a dict of tensors(for multi-stage PatchDCT)
                 A NxN masks is divided into scale x scale patches.
                 bfg demonstrates results of three-class classifier in PatchDCT
                 0 for foreground,1 for mixed,2 for background
-            patch_vectors : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale].
+            patch_vectors : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale] or a dict of tensors(for multi-stage PatchDCT)
                     DCT vector for each patch (only calculate loss for mixed patch)
         """
         for layer in self.conv_norm_relus:
@@ -225,20 +219,19 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         x = self.predictor(x.flatten(start_dim=1))
         if not self.training:
             num_masks = x.shape[0]
-            if num_masks==0:
+            if num_masks == 0:
                 return x, 0, 0
-        #reverse transform to obtain high-resolution masks
-        masks = self.dct_encoding.decode(x).real.reshape(-1,1,self.mask_size,self.mask_size)
-
+        # reverse transform to obtain high-resolution masks
+        masks = self.dct_encoding.decode(x).real.reshape(-1, 1, self.mask_size, self.mask_size)
 
         # PatchDCT
-        bfg, patch_vectors = self.patchdct(masks,fine_mask_features)
-        
+        bfg, patch_vectors = self.patchdct(masks, fine_mask_features)
+
         if self.num_stage == 1:
             return x, bfg, patch_vectors
-        
+
         else:
-        # for multi-stage PatchDCT
+            # for multi-stage PatchDCT
             if self.training:
                 classes = self.gt.get_gt_classes(instances)
             else:
@@ -252,16 +245,17 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
             patch_vectors_dict = {}
             bfg_dict[0] = bfg
             patch_vectors_dict[0] = patch_vectors
-            for i in range(1,self.num_stage):
+            for i in range(1, self.num_stage):
                 masks = self.stage_patch2mask(bfg, patch_vectors)
-                bfg, patch_vectors = self.patchdct(masks,fine_mask_features)
+                bfg, patch_vectors = self.patchdct(masks, fine_mask_features)
                 bfg = bfg[indices, classes].permute(0, 2, 3, 1).reshape(-1, 3)
-                patch_vectors = patch_vectors[indices, classes].permute(0, 2, 3, 1).reshape(-1, self.patch_dct_vector_dim)
+                patch_vectors = patch_vectors[indices, classes].permute(0, 2, 3, 1).reshape(-1,
+                                                                                            self.patch_dct_vector_dim)
                 bfg_dict[i] = bfg
                 patch_vectors_dict[i] = patch_vectors
             return x, bfg_dict, patch_vectors_dict
 
-    def stage_patch2mask(self,bfg,patch_vectors):
+    def stage_patch2mask(self, bfg, patch_vectors):
         device = bfg.device
         index = torch.argmax(bfg, dim=1)
         bg = torch.zeros_like(patch_vectors, device=device)
@@ -270,11 +264,8 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         fg[index == 2, 0] = self.patch_size
         masks = patch_vectors * bg + fg
         masks = self.patch_dct_encoding.decode(masks).real
-        masks = patch2masks(masks,self.scale,self.patch_size,self.mask_size_assemble)
-        return masks[:,None,:,:]
-        
-
-        
+        masks = patch2masks(masks, self.scale, self.patch_size, self.mask_size_assemble)
+        return masks[:, None, :, :]
 
     def patchdct(self, masks, fine_mask_features):
         """
@@ -286,18 +277,18 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         Returns:
             bfg and patch_vector of each PatchDCT block
         """
-        masks = F.interpolate(masks,size = (self.scale*self.ratio,self.scale*self.ratio))
+        masks = F.interpolate(masks, size=(self.scale * self.ratio, self.scale * self.ratio))
         masks = self.reshape(masks)
         fine_mask_features = masks + fine_mask_features
         fine_mask_features = self.fusion(fine_mask_features)
         fine_mask_features = self.downsample(fine_mask_features)
         patch_vectors = self.predictor1(fine_mask_features)
         bfg = self.predictor_bfg(fine_mask_features)
-        bfg = bfg.reshape(-1,self.num_classes,3,self.scale,self.scale)
-        patch_vectors = patch_vectors.reshape(-1,self.num_classes,self.patch_dct_vector_dim,self.scale,self.scale)
+        bfg = bfg.reshape(-1, self.num_classes, 3, self.scale, self.scale)
+        patch_vectors = patch_vectors.reshape(-1, self.num_classes, self.patch_dct_vector_dim, self.scale, self.scale)
         return bfg, patch_vectors
 
-    def forward(self, x, fine_mask_features,instances: List[Instances]):
+    def forward(self, x, fine_mask_features, instances: List[Instances]):
         """
         Args:
             x: input region feature(s) provided by :class:`ROIHeads`.
@@ -311,24 +302,24 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         Returns:
             A dict of losses in training. The predicted "instances" in inference.
         """
-        x, bfg, patch_vectors = self.layers(x,fine_mask_features, instances)
+        x, bfg, patch_vectors = self.layers(x, fine_mask_features, instances)
         if self.training:
-            return {"loss_mask": self.mask_rcnn_dct_loss(x,bfg,patch_vectors,instances, self.vis_period)}
+            return {"loss_mask": self.mask_rcnn_dct_loss(x, bfg, patch_vectors, instances, self.vis_period)}
         else:
-            pred_instances = self.mask_rcnn_dct_inference(x,bfg,patch_vectors,instances)
+            pred_instances = self.mask_rcnn_dct_inference(x, bfg, patch_vectors, instances)
             return pred_instances
 
-    def mask_rcnn_dct_loss(self, pred_mask_logits,bfg,patch_vectors,instances, vis_period=0):
+    def mask_rcnn_dct_loss(self, pred_mask_logits, bfg, patch_vectors, instances, vis_period=0):
         """
         Compute the mask prediction loss defined in the Mask R-CNN paper.
 
         Args:
             pred_mask_logits (Tensor): [B, D]. D is dct-dim. [B, D]. DCT_Vector in DCT-Mask.
-            bfg: A tensor of shape [B,num_class,3,scale,scale].
+            bfg: A tensor of shape [B,num_class,3,scale,scale] or a dict of tensors(for multi-stage PatchDCT)
                 A NxN masks is divided into scale x scale patches.
                 bfg demonstrates results of three-class classifier in PatchDCT
                 0 for foreground,1 for mixed,2 for background
-            patch_vectors : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale].
+            patch_vectors : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale] or a dict of tensors(for multi-stage PatchDCT)
                     DCT vector for each patch (only calculate loss for mixed patch)
             instances (list[Instances]): A list of N Instances, where N is the number of images
                 in the batch. These instances are in 1:1
@@ -349,31 +340,31 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
         else:
             raise ValueError("Loss Type Only Support : l1, l2; yours: {}".format(self.dct_loss_type))
 
-        gt_masks,gt_classes,gt_masks_coarse,gt_bfg= self.gt.get_gt_mask(instances,pred_mask_logits)
+        gt_masks, gt_classes, gt_masks_coarse, gt_bfg = self.gt.get_gt_mask(instances, pred_mask_logits)
 
-        mask_loss = self.loss_para[0]*loss_func(pred_mask_logits, gt_masks_coarse)
-        
-        if self.num_stage==1:
-            
+        mask_loss = self.loss_para[0] * loss_func(pred_mask_logits, gt_masks_coarse)
+
+        if self.num_stage == 1:
+
             num_instance = gt_classes.size()[0]
             indice = torch.arange(num_instance)
-            bfg = bfg[indice,gt_classes].permute(0,2,3,1).reshape(-1,3)
-            patch_vectors = patch_vectors[indice,gt_classes].permute(0,2,3,1).reshape(-1,self.patch_dct_vector_dim)
-            patch_vectors = patch_vectors[gt_bfg==1,:]
-            mask_loss_2 = F.cross_entropy(bfg,gt_bfg)
-            mask_loss_3 = loss_func(patch_vectors,gt_masks)
-            mask_loss = mask_loss + self.loss_para[1]*(mask_loss_2 + mask_loss_3)
+            bfg = bfg[indice, gt_classes].permute(0, 2, 3, 1).reshape(-1, 3)
+            patch_vectors = patch_vectors[indice, gt_classes].permute(0, 2, 3, 1).reshape(-1, self.patch_dct_vector_dim)
+            patch_vectors = patch_vectors[gt_bfg == 1, :]
+            mask_loss_2 = F.cross_entropy(bfg, gt_bfg)
+            mask_loss_3 = loss_func(patch_vectors, gt_masks)
+            mask_loss = mask_loss + self.loss_para[1] * (mask_loss_2 + mask_loss_3)
             mask_loss = self.mask_loss_para * mask_loss
         else:
             for i in range(self.num_stage):
                 bfg_this_stage = bfg[i]
                 patch_vectors_this_stage = patch_vectors[i]
-                patch_vectors_this_stage = patch_vectors_this_stage[gt_bfg==1]
-                mask_loss += self.loss_para[i+1]*(F.cross_entropy(bfg_this_stage,gt_bfg) +\
-                                                   F.l1_loss(patch_vectors_this_stage,gt_masks))
+                patch_vectors_this_stage = patch_vectors_this_stage[gt_bfg == 1]
+                mask_loss += self.loss_para[i + 1] * (
+                            F.cross_entropy(bfg_this_stage, gt_bfg) + loss_func(patch_vectors_this_stage, gt_masks))
         return mask_loss
 
-    def mask_rcnn_dct_inference(self,pred_mask_logits,bfg,patch_vectors,pred_instances):
+    def mask_rcnn_dct_inference(self, pred_mask_logits, bfg, patch_vectors, pred_instances):
         """
         Convert pred_mask_logits to estimated foreground probability masks while also
         extracting only the masks for the predicted classes in pred_instances. For each
@@ -385,11 +376,11 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
                 for class-specific or class-agnostic, where B is the total number of predicted masks
                 in all images, C is the number of foreground classes, and Hmask, Wmask are the height
                 and width of the mask predictions. The values are logits.
-            bfg: A tensor of shape [B,num_class,3,scale,scale].
+            bfg: A tensor of shape [B,num_class,3,scale,scale] or a dict of tensors(for multi-stage PatchDCT)
                 A NxN masks is divided into scale x scale patches.
                 bfg demonstrates results of three-class classifier in PatchDCT
                 0 for foreground,1 for mixed,2 for background
-            patch_vectors : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale].
+            patch_vectors : A tensor of shape:[B,num_class,patch_dct_vector_dim,scale,scale] or a dict of tensors(for multi-stage PatchDCT)
                     DCT vector for each patch (only calculate loss for mixed patch)
             pred_instances (list[Instances]): A list of N Instances, where N is the number of images
                 in the batch. Each Instances must have field "pred_classes".
@@ -412,23 +403,23 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
             pred_classes = pred_instances[0].pred_classes
             num_masks = pred_classes.shape[0]
             indices = torch.arange(num_masks)
-            if self.num_stage>1:
-                bfg = bfg[self.num_stage-1]
-                patch_vectors = patch_vectors[self.num_stage-1]
+            if self.num_stage > 1:
+                bfg = bfg[self.num_stage - 1]
+                patch_vectors = patch_vectors[self.num_stage - 1]
             else:
-                bfg = bfg[indices,pred_classes].permute(0,2,3,1).reshape(-1,3)
-                patch_vectors = patch_vectors[indices,pred_classes].permute(0,2,3,1).reshape(-1,self.patch_dct_vector_dim)
+                bfg = bfg[indices, pred_classes].permute(0, 2, 3, 1).reshape(-1, 3)
+                patch_vectors = patch_vectors[indices, pred_classes].permute(0, 2, 3, 1).reshape(-1,
+                                                                                                 self.patch_dct_vector_dim)
 
             with torch.no_grad():
-                
 
-                bfg = F.softmax(bfg,dim=1)
+                bfg = F.softmax(bfg, dim=1)
                 bfg[bfg[:, 0] > self.patch_threshold, 0] = bfg[bfg[:, 0] > self.patch_threshold, 0] + 1
                 bfg[bfg[:, 2] > self.patch_threshold, 2] = bfg[bfg[:, 2] > self.patch_threshold, 2] + 1
-                index = torch.argmax(bfg,dim=1)
+                index = torch.argmax(bfg, dim=1)
 
                 if self.eval_gt:
-                    gt_masks,index = self.gt.get_gt_mask_inference(pred_instances, pred_mask_logits)
+                    gt_masks, index = self.gt.get_gt_mask_inference(pred_instances, pred_mask_logits)
                     patch_vectors[index == 1] = gt_masks
 
                 patch_vectors[index == 0, ::] = 0
@@ -437,11 +428,8 @@ class MaskRCNNPatchDCTHead(BaseMaskRCNNHead):
 
                 pred_mask_rc = self.patch_dct_encoding.decode(patch_vectors)
                 # assemble patches to obtain an entire mask
-                pred_mask_rc = patch2masks(pred_mask_rc,self.scale,self.patch_size,self.mask_size_assemble)
-
+                pred_mask_rc = patch2masks(pred_mask_rc, self.scale, self.patch_size, self.mask_size_assemble)
 
             pred_mask_rc = pred_mask_rc[:, None, :, :]
             pred_instances[0].pred_masks = pred_mask_rc
             return pred_instances
-
-    
